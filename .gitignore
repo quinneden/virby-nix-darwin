@@ -1,0 +1,4 @@
+*.bak
+*.bck
+.DS_Store
+result/
