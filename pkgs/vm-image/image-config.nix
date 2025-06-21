@@ -28,7 +28,7 @@ let
 in
 {
   boot = mkForce {
-    kernelParams = [ "console=tty0" ];
+    kernelParams = [ "console=hvc0" ];
     loader = {
       efi.canTouchEfiVariables = true;
       systemd-boot.enable = true;
