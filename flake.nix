@@ -15,6 +15,7 @@
       linuxSystems = lib.forEach darwinSystems (f: lib.replaceString "darwin" "linux" f);
 
       perSystem = systems: f: lib.genAttrs systems (system: f (import nixpkgs { inherit system; }));
+
       perDarwinSystem = perSystem darwinSystems;
       perLinuxSystem = perSystem linuxSystems;
     in
