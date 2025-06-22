@@ -8,7 +8,6 @@
 }:
 let
   inherit (lib)
-    mkDefault
     mkForce
     optional
     optionalAttrs
@@ -27,7 +26,7 @@ let
   sshHostPrivateKeyPath = sshDirPath + sshHostPrivateKeyFileName;
 in
 {
-  boot = mkForce {
+  boot = {
     kernelParams = [ "console=hvc0" ];
     loader = {
       efi.canTouchEfiVariables = true;
@@ -36,7 +35,7 @@ in
     };
   };
 
-  documentation.enable = mkDefault false;
+  documentation.enable = false;
 
   fileSystems = {
     "/".options = [
@@ -52,7 +51,7 @@ in
 
   networking.hostName = mkForce vmHostName;
 
-  nix = mkDefault {
+  nix = {
     channel.enable = false;
     registry.nixpkgs.flake = inputs.nixpkgs;
 
@@ -68,23 +67,22 @@ in
     };
   };
 
-  security = mkForce {
-    sudo = {
-      enable = cfg.debug;
-      wheelNeedsPassword = !cfg.debug;
-    };
+  security.sudo = {
+    enable = cfg.debug;
+    wheelNeedsPassword = !cfg.debug;
   };
 
   services = {
     getty = optionalAttrs cfg.debug { autologinUser = vmUser; };
 
     logind = optionalAttrs cfg.onDemand.enable {
-      extraConfig = mkForce ''
+      extraConfig = ''
         IdleAction=poweroff
         IdleActionSec=${toString cfg.onDemand.ttl}minutes
       '';
     };
-    openssh = mkForce {
+
+    openssh = {
       enable = true;
       hostKeys = [ ]; # disable automatic host key generation
 
@@ -95,12 +93,12 @@ in
     };
   };
 
-  system = mkDefault {
+  system = {
     disableInstallerTools = true;
     stateVersion = versions.majorMinor trivial.version;
   };
 
-  # macOS' Virtualization framework's virtiofs implementation will grant any guest user access
+  # Virtualization.framework's virtiofs implementation will grant any guest user access
   # to mounted files; they always appear to be owned by the effective UID and so access cannot
   # be restricted.
   # To protect the guest's SSH host key, the VM is configured to prevent any logins (via
@@ -109,7 +107,7 @@ in
   # the filesystem before allowing SSH to start.
   # Once SSH has been allowed to start (and given the guest user a chance to log in), the
   # virtiofs must never be mounted again (as the user could have left some process active to
-  # read its secrets).  This is prevented by `unitconfig.ConditionPathExists` below.
+  # read its secrets). This is prevented by `unitconfig.ConditionPathExists` below.
   systemd.services.install-sshd-keys =
     let
       mountTag = "sshd-keys";
@@ -152,7 +150,7 @@ in
       '';
     };
 
-  users = mkForce {
+  users = {
     # console and (initial) SSH logins are purposefully disabled
     # see: `systemd.services.install-sshd-keys`
     allowNoPasswordLogin = true;

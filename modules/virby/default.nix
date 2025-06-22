@@ -6,7 +6,6 @@
   ...
 }:
 let
-
   inherit (_lib.constants)
     name
     sshHostPrivateKeyFileName
@@ -28,23 +27,24 @@ let
     concatStringsSep
     getExe
     isString
+    makeBinPath
     mkAfter
     mkBefore
-    mkEnableOption
     mkDefault
-    mkIf
+    mkEnableOption
     mkForce
+    mkIf
     mkMerge
     mkOption
     optional
-    optionals
     optionalAttrs
+    optionals
     optionalString
     replaceString
     types
     ;
 
-  cfg = config.services.virby;
+  cfg = config.services.virb;
 in
 {
   options.services.virby = {
@@ -56,9 +56,8 @@ in
       description = ''
         Whether to allow non-root users to SSH into the VM.
 
-        This is useful for debugging, but it means that any user on the host
-        machine can ssh into the VM without requiring root privileges, which
-        could pose a security risk.
+        This is useful for debugging, but it means that any user on the host machine can ssh into
+        the VM without requiring root privileges, which could pose a security risk.
       '';
     };
 
@@ -68,8 +67,7 @@ in
       description = ''
         The number of CPU cores allocated to the VM.
 
-        This also sets the maximum number of jobs allowed for the builder in
-        the `nix.buildMachines` specification.
+        This also sets the `nix.buildMachines.max-jobs` setting.
       '';
     };
 
@@ -79,8 +77,9 @@ in
       description = ''
         Whether to enable debug logging for the VM.
 
-        When enabled, the VM and daemon will log additional information to help
-        with debugging issues.
+        When enabled, the launchd daemon will direct all stdout/stderr output to log files, as well
+        as the VM's serial output. This is useful for debugging issues with the VM, but it may pose
+        a security risk and should only be enabled when necessary.
       '';
     };
 
@@ -90,8 +89,8 @@ in
       description = ''
         The size of the disk image for the VM.
 
-        This must be specified as a string in the format: "xGiB", where "x" is
-        a number of GiB.
+        This must be specified as a string in the format: "xGiB" or "xG", where "x" is a number of
+        gibibytes (GiB).
       '';
     };
 
@@ -99,15 +98,19 @@ in
       type = types.deferredModule;
       default = { };
       description = ''
-        Extra NixOS configuration module to pass to the VM.
+        Additional NixOS modules to include in the VM's system configuration.
 
-        The VM's default configuration allows it to be securely used as a
-        builder. Some extra configuration changes may endager this security and
-        allow compromised deriviations into the host's Nix store. Care should
-        be taken to think through the implications of any extra configuration
-        changes using this option. When in doubt, please open a GitHub issue to
-        discuss (additional, restricted options can be added to support safe
-        configurations).
+        The VM's default configuration allows it to be securely used as a builder. Be aware when
+        using this option, that additional configuration could potentially expose the VM to
+        security risks such as compromised derivations being added to the nix store.
+
+        Any changes made to this option's value will cause a rebuild of the VM's disk image, and
+        the copy-on-write overlay image will be recreated from the new base image.
+
+        Options defined here which are also defined by the default configuration, but not forced in
+        the default configuration, will override the default values. Some options in the default
+        configuration are forced (with `lib.mkForce`), such as `networking.hostName`. Any options
+        defined here which are forced in the default configuration will be silently ignored.
       '';
     };
 
@@ -117,79 +120,126 @@ in
       description = ''
         The amount of memory to allocate to the VM in MiB.
 
-        This can be specified as an integer representing an amount in MiB,
-        e.g., 6144, or a string, e.g. "6GiB".
+        This can be specified as either: an integer representing an amount in MiB, e.g., `6144`, or a
+        string, e.g. `"6GiB"`.
       '';
     };
 
     onDemand = mkOption {
       type =
         with types;
-        submodule {
+        (submodule {
           options = {
-            enable = mkEnableOption "on-demand mode for the VM";
+            enable = mkOption {
+              type = bool;
+              description = ''
+                Whether to enable on-demand activation of the VM.
+              '';
+            };
             ttl = mkOption {
               type = int;
-              default = 180;
               description = ''
-                This specifies the number of minutes of inactivity which must
-                pass before the VM shuts down.
+                This specifies the number of minutes of inactivity which must pass before the VM
+                shuts down.
 
                 This option is only relevant when `onDemand.enable` is true.
               '';
             };
           };
-        };
+        });
+      default = {
+        enable = false;
+        ttl = 180;
+      };
       description = ''
-        By default, the VM is always-on, running as a daemon in the background.
-        This allows builds to started right away, but also means the VM will
-        always be consuming (a small amount of) cpu and memory resources.
+        By default, the VM is always-on, running as a daemon in the background. This allows builds
+        to started right away, but also means the VM will always be consuming (a small amount of)
+        cpu and memory resources.
 
-        When enabled, this option will allow the VM to be activated on-demand;
-        when not in use, the VM will not be running. When a build job requiring
-        use of the VM is initiated, it signals the VM to start, and once an SSH
-        connection can be established, the VM continues the build. After a
-        period of idle time passes, the VM will shut down.
+        When enabled, this option will allow the VM to be activated on-demand; when not in use, the
+        VM will not be running. When a build job requiring use of the VM is initiated, it signals
+        the VM to start, and once an SSH connection can be established, the VM continues the build.
+        After a period of time passes in which the VM stays idle, it will shut down.
 
-        By default, the VM waits 3 hours before shutting down, but this can be
-        configured with a different value by specifying `onDemand.ttl`.
+        By default, the VM waits 3 hours before shutting down, but this can be configured with a
+        different value by specifying `onDemand.ttl`.
       '';
     };
 
     port = mkOption {
       type = types.port;
-      default = 31177;
+      default = 31222;
       description = ''
         The SSH port used by the VM.
       '';
     };
 
     rosetta = mkOption {
-      type = types.submodule {
-        options = {
-          enable = mkEnableOption "Rosetta support for the VM";
-        };
+      type =
+        with types;
+        (submodule {
+          options = {
+            enable = mkOption {
+              type = bool;
+              description = ''
+                Whether to enable Rosetta.
+              '';
+            };
+          };
+        });
+      default = {
+        enable = false;
       };
       description = ''
         Whether to enable Rosetta support for the VM.
 
-        This is only supported on aarch64-darwin systems and allows the VM to
-        build x86_64-linux packages using Rosetta translation.
+        This is only supported on aarch64-darwin systems and allows the VM to build x86_64-linux
+        packages using Rosetta translation. It is recommended to only enable this option if you
+        need that functionality, as Rosetta causes a slight performance decrease in VMs when
+        enabled, even when it's not being utilized.
+      '';
+    };
+
+    speedFactor = mkOption {
+      type = types.int;
+      default = 1;
+      description = ''
+        The speed factor to set for the VM in `nix.buildMachines`.
+
+        This is an arbitrary integer that indicates the speed of this builder, relative to other
+        builders. Higher is faster.
       '';
     };
   };
 
   config =
     let
+      binPath = makeBinPath (
+        with pkgs;
+        [
+          coreutils
+          findutils
+          gnugrep
+          nix
+          openssh
+        ]
+      );
+
+      linuxSystem = replaceString "darwin" "linux" pkgs.system;
+      imageWithFinalConfig = self.packages.${linuxSystem}.vm-image.override {
+        inherit (cfg)
+          debug
+          extraConfig
+          onDemand
+          rosetta
+          ;
+      };
+
       baseDiskPath = "${workingDirectory}/base.img";
       diffDiskPath = "${workingDirectory}/diff.img";
       imageFileName = replaceString ".raw" ".img" imageWithFinalConfig.passthru.filePath;
-      imageWithFinalConfig = vm-image.override { inherit (cfg) extraConfig onDemand rosetta; };
-      linuxSystem = replaceString "darwin" "linux" pkgs.system;
       sourceImage = "${imageWithFinalConfig}/${imageFileName}";
-      vm-image = self.packages.${linuxSystem}.vm-image;
 
-      efiVariableStorePath = "${workingDirectory}/${vmHostName}.efistore";
       memoryMib = if isString cfg.memory then parseMemoryString cfg.memory else cfg.memory;
       networkSocketPath = "${workingDirectory}/${vmHostName}-network.sock";
       serialLogFile = "/tmp/${vmHostName}.serial.log";
@@ -198,7 +248,7 @@ in
 
       daemonName = "${name}d";
       gvproxyDaemonName = "${name}-gvproxyd";
-      workingDirectory = "/var/lib/${daemonName}";
+      workingDirectory = "/var/lib/${name}";
 
       darwinGid = 348;
       darwinGroup = "${name}";
@@ -215,13 +265,13 @@ in
           "--memory"
           (toString memoryMib)
           "--bootloader"
-          "efi,variable-store=${efiVariableStorePath},create"
+          "efi,variable-store=${workingDirectory}/efistore.nvram,create"
           "--device"
           "virtio-blk,path=${diffDiskPath}"
           "--device"
           "virtio-fs,sharedDir=${workingDirectory}/${sshdKeysSharedDirName},mountTag=sshd-keys"
           "--device"
-          "virtio-net,unixSocketPath=${networkSocketPath},mac=5a:94:ef:e4:0c:ee"
+          "virtio-net,unixSocketPath=${networkSocketPath},mac=5a:94:ef:e4:0c:ee" # MAC address expected by gvproxy
           "--device"
           "virtio-balloon"
           "--device"
@@ -238,93 +288,106 @@ in
       );
 
       runnerScript = pkgs.writeShellScript "${daemonName}-runner" ''
-        set -xeuo pipefail
+        PATH=${binPath}:$PATH
+
+        set -euo pipefail
 
         check_gvproxyd_status() {
-          if launchctl list | grep -q "org.nixos.${gvproxyDaemonName}"; then
-            local pid=$(launchctl list | grep "org.nixos.${gvproxyDaemonName}" | cut -f1)
-            if [[ -n $pid && $pid != "-" ]]; then
-              return 0  # Service is running
-            else
-              return 1  # Service is loaded but not running
-            fi
-          else
-            return 2  # Service is not loaded
-          fi
+          local pid=$(launchctl list | grep "org.nixos.${gvproxyDaemonName}" | cut -f1) || return 2
+          grep -qE "^[0-9]{1,5}$" <<< "$pid" || return 1
         }
 
         kickstart_gvproxyd() {
-          if launchctl kickstart "org.nixos.${gvproxyDaemonName}"; then
-            ${logInfo} "Successfully kickstarted org.nixos.${gvproxyDaemonName}"
-            return 0
-          else
-            ${logError} "Failed to kickstart org.nixos.${gvproxyDaemonName}"
+          if ! launchctl kickstart "system/org.nixos.${gvproxyDaemonName}"; then
+            ${logError} "Failed to kickstart ${gvproxyDaemonName}"
             return 1
           fi
+          ${logInfo} "Successfully kickstarted ${gvproxyDaemonName}"
         }
 
         bootstrap_gvproxyd() {
-          local plist_path="/Library/LaunchDaemons/org.nixos.${gvproxyDaemonName}.plist"
+          local plist="/Library/LaunchDaemons/org.nixos.${gvproxyDaemonName}.plist"
 
-          if [[ ! -f $plist_path ]]; then
-            ${logError} "$plist_path does not exist"
+          if [[ ! -f $plist ]]; then
+            ${logError} "file not found: $plist"
             return 1
           fi
 
-          if launchctl bootstrap system "$plist_path"; then
-            ${logInfo} "Successfully bootstrapped org.nixos.${gvproxyDaemonName}"
-            return 0
-          else
-            ${logError} "Failed to bootstrap org.nixos.${gvproxyDaemonName}"
+          if ! launchctl bootstrap system "$plist"; then
+            ${logError} "Failed to bootstrap ${gvproxyDaemonName}"
             return 1
           fi
+
+          ${logInfo} "Successfully bootstrapped ${gvproxyDaemonName}"
         }
 
-        cleanup() {
-          ${logInfo} "Cleaning up resources..."
-          rm -f ${efiVariableStorePath} ${workingDirectory}/vfkit-*-*.sock
+        should_keygen() {
+          local key_files=(
+            ${sshdKeysSharedDirName}/${sshHostPrivateKeyFileName}
+            ${sshdKeysSharedDirName}/${sshUserPublicKeyFileName}
+            ${sshHostPublicKeyFileName}
+            ${sshUserPrivateKeyFileName}
+          )
+
+          for file in "''${key_files[@]}"; do
+            [[ ! -f $file ]] && return 0
+          done
         }
 
-        trap cleanup EXIT INT TERM
+        generate_ssh_keys() {
+          local temp_dir=$(mktemp -d)
+          local temp_host_key="$temp_dir/host_key"
+          local temp_user_key="$temp_dir/user_key"
+          local user_key_required_mode=${if cfg.allowUserSsh then "644" else "600"}
+
+          trap "rm -rf $temp_dir" RETURN
+
+          ssh-keygen -C ${darwinUser}@darwin -f "$temp_user_key" -N "" -t ed25519 || return 1
+          ssh-keygen -C root@${vmHostName} -f "$temp_host_key" -N "" -t ed25519 || return 1
+
+          # Set permissions based on `cfg.allowUserSsh`
+          chmod 640 "$temp_host_key.pub" "$temp_user_key.pub"
+          chmod 600 "$temp_host_key"
+          chmod "$user_key_required_mode" "$temp_user_key"
+
+          # Remove old keys if they exist
+          rm -f ${sshUserPrivateKeyFileName} ${sshHostPublicKeyFileName}
+          rm -rf ${sshdKeysSharedDirName}
+
+          echo "${sshHostKeyAlias} $(cat $temp_host_key.pub)" > ssh_known_hosts
+
+          mkdir -p ${sshdKeysSharedDirName}
+
+          mv "$temp_user_key" ${sshUserPrivateKeyFileName}
+          mv "$temp_host_key.pub" ${sshHostPublicKeyFileName}
+          mv "$temp_host_key" ${sshdKeysSharedDirName}/${sshHostPrivateKeyFileName}
+          mv "$temp_user_key.pub" ${sshdKeysSharedDirName}/${sshUserPublicKeyFileName}
+        }
+
+        trap 'rm -f vfkit-*-*.sock' EXIT INT TERM
 
         umask 'g-w,o='
         chmod 'g-w,o=x' .
 
-        # Setup SSH keys (idempotent)
-        if ! find ${sshUserPrivateKeyFileName} -perm '${
-          if cfg.allowUserSsh then "-go=r" else "+go=r"
-        }' -exec true '{}' '+' 2>/dev/null; then
-          rm -f ${sshUserPrivateKeyFileName} ${sshUserPublicKeyFileName}
-          ssh-keygen -C ${darwinUser}@darwin -f ${sshUserPrivateKeyFileName} -N "" -t ed25519
-
-          rm -f ${sshHostPrivateKeyFileName} ${sshHostPublicKeyFileName}
-          ssh-keygen -C root@${vmHostName} -f ${sshHostPrivateKeyFileName} -N "" -t ed25519
-
-          mkdir -p ${sshdKeysSharedDirName}
-          mv ${sshUserPublicKeyFileName} ${sshHostPrivateKeyFileName} ${sshdKeysSharedDirName}
-
-          echo ${sshHostKeyAlias} "$(cat ${sshHostPublicKeyFileName})" > ssh_known_hosts
-        fi
-
         sourceImageHash=$(nix hash file ${sourceImage} 2>/dev/null)
-        baseDiskHash=$(nix hash file ${baseDiskPath} 2>/dev/null || true)
+        baseDiskHash=$(nix hash file ${baseDiskPath} 2>/dev/null) || true
 
         if [[ $sourceImageHash != $baseDiskHash || ! -f ${diffDiskPath} ]]; then
           ${logInfo} "Creating base/diff disk images..."
 
           rm -f ${baseDiskPath} ${diffDiskPath}
 
-          if ! cp ${sourceImage} ${baseDiskPath} && chmod 'g+r' ${baseDiskPath}; then
+          if ! cp ${sourceImage} ${baseDiskPath}; then
             ${logError} "Failed to copy base disk image to ${baseDiskPath}"
             exit 1
           fi
           ${logInfo} "Copied base disk image to ${baseDiskPath}"
 
-          if ! cp --reflink=always ${baseDiskPath} ${diffDiskPath} && chmod 'u+w'; then
-            ${logError} "Failed to create copy-on-write image at ${diffDiskPath} from backing image ${baseDiskPath}"
+          if ! (cp --reflink=always ${baseDiskPath} ${diffDiskPath} && chmod 'u+w' ${diffDiskPath}); then
+            ${logError} "Failed to create diff disk image"
             exit 1
           fi
-          ${logInfo} "Created copy-on-write image at ${diffDiskPath} from backing image ${baseDiskPath}"
+          ${logInfo} "Created diff disk image at ${diffDiskPath} from backing image ${baseDiskPath}"
 
           if ! truncate -s ${cfg.diskSize} ${diffDiskPath}; then
             ${logError} "Failed to resize diff disk to ${cfg.diskSize}"
@@ -333,43 +396,59 @@ in
           ${logInfo} "Resized diff disk to ${cfg.diskSize}"
         fi
 
-        # Set SSH file permissions
-        chmod 'go+r' ssh_known_hosts
-        ${optionalString cfg.allowUserSsh "chmod 'go+r' ${sshUserPrivateKeyFileName}"}
+        if should_keygen; then
+          ${logInfo} "Generating SSH keys..."
+          if ! generate_ssh_keys; then
+            ${logError} "Failed to generate SSH keys"
+            exit 1
+          fi
+        fi
 
-        SLEEP_INTERVAL=5
-        MAX_RETRIES=6
+        # If `cfg.allowUserSsh` is true, the user key should be group-readable, otherwise it
+        # should be owner-only
+        user_key_required_mode=${if cfg.allowUserSsh then "644" else "600"}
+        user_key_actual_mode=$(stat -c "%a" ${sshUserPrivateKeyFileName} 2>/dev/null)
+
+        if [[ $user_key_required_mode -ne $user_key_actual_mode ]]; then
+          if ! chmod "$user_key_required_mode" ${sshUserPrivateKeyFileName}; then
+            ${logError} "Failed to set permissions on ${sshUserPrivateKeyFileName}"
+            exit 1
+          fi
+        fi
+
+        if ! chmod 'go+r' ssh_known_hosts; then
+          ${logError} "Failed to set permissions on ssh_known_hosts"
+          exit 1
+        fi
+
+        sleep_interval=1
+        max_retries=5
 
         ${logInfo} "Starting monitoring loop for ${gvproxyDaemonName}"
 
         while true; do
-          check_gvproxyd_status
+          check_gvproxyd_status && break
           status=$?
-          case $status in
-            0)
-              ${logInfo} "${gvproxyDaemonName} is running, breaking loop..."
-              break
-              ;;
+          case "$status" in
             1)
               ${logInfo} "${gvproxyDaemonName} is loaded but not running, kickstarting..."
               retry_count=0
 
-              while [[ $retry_count -lt $MAX_RETRIES ]]; do
-                kickstart_gvproxyd && break
-                retry_count=$((retry_count + 1))
-                sleep $SLEEP_INTERVAL
+              while [[ $retry_count -lt $max_retries ]]; do
+                kickstart_gvproxyd && break 2
+                sleep "$sleep_interval"
+                retry_count=$((++retry_count))
+                sleep_interval=$((sleep_interval * 2))
               done
 
-              ${logInfo} "Failed to start ${gvproxyDaemonName} after $MAX_RETRIES attempts"
+              ${logInfo} "Failed to start ${gvproxyDaemonName} after $max_retries attempts"
               exit 1
               ;;
             2)
-              ${logInfo} "org.nixos.${gvproxyDaemonName} is not loaded, bootstrapping..."
+              ${logInfo} "${gvproxyDaemonName} is not loaded, bootstrapping..."
               bootstrap_gvproxyd
               ;;
           esac
-
-          sleep $SLEEP_INTERVAL
         done
 
         ${logInfo} "Starting VM with command: ${vfkitCommand}"
@@ -386,27 +465,29 @@ in
           ${setupLogFunctions}
 
           if [[ -d ${workingDirectory} ]]; then
-            logInfo "removing working directory ${workingDirectory}..."
+            logInfo "Removing working directory..."
             rm -rf ${workingDirectory}
           fi
 
-          if uid=$(id -u ${darwinUser} 2>'/dev/null'); then
+          if uid=$(id -u ${darwinUser} 2>/dev/null); then
             if [[ $uid -ne ${toString darwinUid} ]]; then
-              logError "existing user: ${darwinUser} has unexpected UID: $uid"
+              logError "Existing user: ${darwinUser} has unexpected UID: $uid"
               exit 1
             fi
-            logInfo "deleting user ${darwinUser}..."
+
+            logInfo "Deleting user ${darwinUser}..."
             dscl . -delete ${userPath}
           fi
 
           unset 'uid'
 
-          if primaryGroupId=$(dscl . -read ${groupPath} 'PrimaryGroupID' 2>'/dev/null'); then
-            if [[ "$primaryGroupId" != *\ ${toString darwinGid} ]]; then
+          if primaryGroupId=$(dscl . -read ${groupPath} 'PrimaryGroupID' 2>/dev/null | cut -d' ' -f2); then
+            if [[ $primaryGroupId -ne ${toString darwinGid} ]]; then
               logError "Existing group: ${darwinGroup} has unexpected GID: $primaryGroupId"
               exit 1
             fi
-            log "deleting group ${darwinGroup}..."
+
+            logInfo "Deleting group ${darwinGroup}..."
             dscl . -delete ${groupPath}
           fi
 
@@ -426,32 +507,38 @@ in
           ${setupLogFunctions}
 
           # Create group
-          if ! primaryGroupId=$(dscl . -read ${groupPath} 'PrimaryGroupID' 2>'/dev/null'); then
-            logInfo "Creating group ${darwinGroup} with GID ${toString darwinGid}..."
+          if ! primaryGroupId=$(dscl . -read ${groupPath} 'PrimaryGroupID' 2>/dev/null | cut -d' ' -f2); then
+            logInfo "Creating group ${darwinGroup}..."
             dscl . -create ${groupPath} 'PrimaryGroupID' ${toString darwinGid}
-          elif [[ "$primaryGroupId" != *\ ${toString darwinGid} ]]; then
-            logError "Existing group: ${darwinGroup} has unexpected GID: $primaryGroupId"
+          elif [[ $primaryGroupId -ne ${toString darwinGid} ]]; then
+            logError "Existing group: ${darwinGroup} has unexpected GID: $primaryGroupId, expected: ${toString darwinGid}"
             exit 1
           fi
 
+          unset 'primaryGroupId'
+
           # Create user
-          if ! uid=$(id -u ${darwinUser} 2>'/dev/null'); then
-            logInfo "Setting up user ${darwinUser} with UID ${toString darwinUid}..."
+          if ! uid=$(id -u ${darwinUser} 2>/dev/null); then
+            logInfo "Setting up user ${darwinUser}..."
             dscl . -create ${userPath}
             dscl . -create ${userPath} 'PrimaryGroupID' ${toString darwinGid}
             dscl . -create ${userPath} 'NFSHomeDirectory' ${workingDirectory}
-            dscl . -create ${userPath} 'UserShell' '/usr/bin/false'
+            dscl . -create ${userPath} 'UserShell' /usr/bin/false
             dscl . -create ${userPath} 'IsHidden' 1
             dscl . -create ${userPath} 'UniqueID' ${toString darwinUid}
           elif [[ $uid -ne ${toString darwinUid} ]]; then
-            logError "Existing user: ${darwinUser} has unexpected UID: $uid"
+            logError "Existing user: ${darwinUser} has unexpected UID: $uid, expected: ${toString darwinUid}"
             exit 1
           fi
 
+          unset 'uid'
+
           # Setup working directory
-          logInfo "Setting up ${name} working directory ${workingDirectory}..."
-          mkdir -p ${workingDirectory}
-          chown ${darwinUser}:${darwinGroup} ${workingDirectory}
+          if [[ ! -d ${workingDirectory} ]]; then
+            logInfo "Setting up working directory..."
+            mkdir -p ${workingDirectory}
+            chown ${darwinUser}:${darwinGroup} ${workingDirectory}
+          fi
         '';
 
         environment.etc."ssh/ssh_config.d/100-${vmHostName}.conf".text = ''
@@ -467,43 +554,40 @@ in
 
         launchd.daemons = {
           ${gvproxyDaemonName} = {
+            path = [
+              (pkgs.gvproxy.overrideAttrs {
+                version = "v0.0.0-20241221210737-111901fedac7";
+                src = pkgs.fetchFromGitHub {
+                  owner = "cpick";
+                  repo = "gvisor-tap-vsock";
+                  rev = "111901fedac7429bb2cb003fe8e05768e911d054";
+                  hash = "sha256-APL8EdceAOMHW1IwN0TfOs2ZabwbhJZWLBziWG1/Xdw=";
+                };
+              })
+            ];
+
             script = concatStringsSep " " [
               "exec"
-              (pkgs.gvproxy + "/bin/gvproxy")
+              "2>&1"
+              "gvproxy"
+              (optionalString cfg.debug "-debug")
               "-listen-vfkit"
               ("unixgram://" + networkSocketPath)
               "-ssh-port"
               (toString cfg.port)
             ];
 
-            serviceConfig =
-              {
-                UserName = darwinUser;
-                WorkingDirectory = workingDirectory;
-                RunAtLoad = true;
-                KeepAlive = true;
-                ProcessType = "Background";
-              }
-              // optionalAttrs cfg.debug {
-                StandardErrorPath = "/tmp/${gvproxyDaemonName}.stderr.log";
-                StandardOutPath = "/tmp/${gvproxyDaemonName}.stdout.log";
-              };
+            serviceConfig = {
+              UserName = darwinUser;
+              WorkingDirectory = workingDirectory;
+              RunAtLoad = true;
+              KeepAlive = true;
+              ProcessType = "Background";
+            } // optionalAttrs cfg.debug { StandardOutPath = "/tmp/${gvproxyDaemonName}.stdout.log"; };
           };
 
           ${daemonName} = {
-            path = with pkgs; [
-              coreutils
-              findutils
-              gnugrep
-              nix
-              openssh
-              vfkit
-              "/usr/bin"
-              "/bin"
-              "/usr/sbin"
-              "/sbin"
-            ];
-
+            path = [ "/bin" ];
             command = runnerScript;
 
             serviceConfig =
@@ -537,6 +621,7 @@ in
                 "kvm"
                 "nixos-test"
               ];
+              speedFactor = cfg.speedFactor;
               systems = [ linuxSystem ] ++ optional cfg.rosetta.enable "x86_64-linux";
             }
           ];
