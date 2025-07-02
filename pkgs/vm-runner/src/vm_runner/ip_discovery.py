@@ -68,7 +68,9 @@ class IPDiscovery:
 
             for entry in entries:
                 if entry.hw_address == self.mac_address:
-                    logger.debug(f"Found IP {entry.ip_address} for MAC {self.mac_address}")
+                    logger.debug(
+                        f"Found IP {entry.ip_address} for MAC {self.mac_address}"
+                    )
                     return entry.ip_address
 
             logger.debug(f"No IP found for MAC {self.mac_address}")

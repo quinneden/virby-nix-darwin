@@ -4,7 +4,6 @@ import asyncio
 import logging
 from pathlib import Path
 
-
 from .constants import SSH_USER_PRIVATE_KEY_FILE_NAME, VM_SSH_USER
 
 logger = logging.getLogger(__name__)
@@ -13,8 +12,7 @@ logger = logging.getLogger(__name__)
 async def test_ssh_connectivity(
     ip_address: str,
     working_dir: Path,
-    port: int,
-    timeout: int = 10,
+    timeout: int = 30,
     username: str = VM_SSH_USER,
 ) -> bool:
     """
@@ -23,14 +21,12 @@ async def test_ssh_connectivity(
     Args:
         ip_address: IP address of the VM
         working_dir: Working directory containing SSH keys
-        port: SSH port
         timeout: Connection timeout in seconds
         username: SSH username
 
     Returns:
         True if SSH connection successful, False otherwise
     """
-    # ssh_key_path = working_dir / SSHD_KEYS_SHARED_DIR_NAME / SSH_HOST_PRIVATE_KEY_FILE_NAME
     ssh_key_path = working_dir / SSH_USER_PRIVATE_KEY_FILE_NAME
 
     if not ssh_key_path.exists():
@@ -53,7 +49,7 @@ async def test_ssh_connectivity(
         "-o",
         "PasswordAuthentication=no",
         "-p",
-        str(port),
+        "22",
         "-i",
         str(ssh_key_path),
         f"{username}@{ip_address}",
@@ -61,7 +57,7 @@ async def test_ssh_connectivity(
     ]
 
     try:
-        logger.debug(f"Testing SSH connectivity to {username}@{ip_address}:{port}")
+        logger.debug(f"Testing SSH connectivity to {ip_address}")
 
         process = await asyncio.create_subprocess_exec(
             *ssh_command,
@@ -83,7 +79,9 @@ async def test_ssh_connectivity(
             return success
 
         except asyncio.TimeoutError:
-            logger.debug(f" SSH connection to {ip_address} timed out after {timeout} seconds")
+            logger.debug(
+                f" SSH connection to {ip_address} timed out after {timeout} seconds"
+            )
             process.kill()
             await process.wait()
             return False
@@ -96,7 +94,6 @@ async def test_ssh_connectivity(
 async def wait_for_ssh_ready(
     ip_address: str,
     working_dir: Path,
-    port: int,
     timeout: int = 30,
     check_interval: int = 2,
 ) -> bool:
@@ -106,19 +103,18 @@ async def wait_for_ssh_ready(
     Args:
         ip_address: IP address of the VM
         working_dir: Working directory containing SSH keys
-        port: SSH port
         timeout: Total timeout in seconds
         check_interval: Interval between checks in seconds
 
     Returns:
         True if SSH becomes ready within timeout, False otherwise
     """
-    logger.info(f"Waiting for SSH to be ready on {ip_address}:{port}")
+    logger.info(f"Waiting for SSH connectivity to {ip_address}")
 
     start_time = asyncio.get_event_loop().time()
 
     while (asyncio.get_event_loop().time() - start_time) < timeout:
-        if await test_ssh_connectivity(ip_address, working_dir, port, timeout=5):
+        if await test_ssh_connectivity(ip_address, working_dir, timeout=30):
             logger.info("SSH is ready")
             return True
 

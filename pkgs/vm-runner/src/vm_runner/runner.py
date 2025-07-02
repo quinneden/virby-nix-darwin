@@ -33,8 +33,10 @@ class VirbyVMRunner:
         self._vm_ip: str | None = None
 
     def _generate_mac_address(self) -> str:
-        """Generate a random MAC address for the VM."""
-        return "5a:94:ef:e4:0c:" + f"{random.randint(0, 255):02x}"
+        """Generate a random MAC address for VM usage."""
+        prefix = "02:94"  # Locally administered, unicast
+        suffix = ":".join(f"{random.randint(0, 255):02x}" for _ in range(4))
+        return f"{prefix}:{suffix}"
 
     def _build_vfkit_command(self) -> list[str]:
         """Build vfkit command from configuration."""
@@ -121,7 +123,7 @@ class VirbyVMRunner:
     async def _wait_for_ssh(self, ip: str) -> None:
         """Wait for SSH to become ready."""
         if not await wait_for_ssh_ready(
-            ip, self.working_dir, self.config.port, self.config.ssh_ready_timeout
+            ip, self.working_dir, self.config.ssh_ready_timeout
         ):
             raise RuntimeError("SSH did not become ready in time")
 
@@ -167,7 +169,7 @@ class VirbyVMRunner:
             # Wait for SSH
             await self._wait_for_ssh(ip)
 
-            logger.info(f"VM is ready at {ip}:{self.config.port}")
+            logger.info(f"VM is ready at {ip}")
 
         except Exception as e:
             logger.error(f"Failed to start VM: {e}")

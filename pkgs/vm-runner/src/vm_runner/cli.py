@@ -4,8 +4,8 @@ import asyncio
 import logging
 import sys
 
-from .runner import VirbyVMRunner
 from .config import VMConfig
+from .runner import VirbyVMRunner
 
 
 def setup_logging(debug: bool = False) -> None:
