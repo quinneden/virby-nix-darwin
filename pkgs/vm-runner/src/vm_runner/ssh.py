@@ -4,7 +4,7 @@ import asyncio
 import logging
 from pathlib import Path
 
-from .constants import SSH_USER_PRIVATE_KEY_FILE_NAME, VM_SSH_USER
+from .constants import SSH_KNOWN_HOSTS_FILE_NAME, SSH_USER_PRIVATE_KEY_FILE_NAME, VM_SSH_USER
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +28,7 @@ async def test_ssh_connectivity(
         True if SSH connection successful, False otherwise
     """
     ssh_key_path = working_dir / SSH_USER_PRIVATE_KEY_FILE_NAME
+    known_hosts_path = working_dir / SSH_KNOWN_HOSTS_FILE_NAME
 
     if not ssh_key_path.exists():
         logger.debug(f"SSH key not found at {ssh_key_path}")
@@ -39,9 +40,9 @@ async def test_ssh_connectivity(
         "-o",
         f"ConnectTimeout={timeout}",
         "-o",
-        "StrictHostKeyChecking=no",
+        f"UserKnownHostsFile={known_hosts_path}",
         "-o",
-        "UserKnownHostsFile=/dev/null",
+        "StrictHostKeyChecking=accept-new",
         "-o",
         "BatchMode=yes",
         "-o",

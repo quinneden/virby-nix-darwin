@@ -1,4 +1,4 @@
-VIRBY_VM_CONFIG_FILE := absolute_path("test_artifacts/config.json")
+VIRBY_VM_CONFIG_FILE := env("VIRBY_VM_CONFIG_FILE")
 
 default: help
 
@@ -10,7 +10,7 @@ help:
     @echo "    format         Format code with ruff and isort"
     @echo "    help           Show this help message"
     @echo "    lint           Run linting checks"
-    @echo "    run            Run vm-runner with test config"
+    @echo "    run            Run virby-vm with test config"
     @echo "    test-config    Validate test configuration"
     @echo "    type-check     Run mypy type checking"
 
@@ -54,9 +54,9 @@ test-config:
     @python3 -c "import json; json.load(open('{{ VIRBY_VM_CONFIG_FILE }}')); print('Test config is valid JSON')"
 
 run: test-config
-    @echo "Running vm-runner with test config..."
+    @echo "Running virby-vm with test config..."
     @echo "Note: This requires proper VM setup and will fail without disk images"
-    @VIRBY_VM_CONFIG_FILE={{ VIRBY_VM_CONFIG_FILE }} uv run vm-runner
+    @uv run virby-vm
 
 check: lint type-check
     @echo "All checks passed!"

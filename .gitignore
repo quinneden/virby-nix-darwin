@@ -1,25 +1,24 @@
-*.bak
-*.bck
-.DS_Store
-result/
-pkgs/vm-runner/test_artifacts
-
+# Python
 *.egg-info/
+*.test.json
 .*_cache
+.coverage
+.mypy_cache/
+.pytest_cache/
 .venv/
 __pycache__/
 dist/
-build/
 
-# Test files
-test-config.json
-*.test.json
-test_*.json
+# Nix
+result/
 
-# IDE and editor files
+# Testing
+.env
+pkgs/vm-runner/test_artifacts/
+
+# Misc
+*.bak
+*.bck
+.direnv/
+.DS_Store
 .zed/
-
-# Development artifacts
-.coverage
-.pytest_cache/
-.mypy_cache/

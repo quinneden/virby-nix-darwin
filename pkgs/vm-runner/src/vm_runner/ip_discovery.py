@@ -3,11 +3,11 @@
 import logging
 import re
 from pathlib import Path
-from typing import List, Optional
 
 import aiofiles
 
 from .constants import DHCPD_LEASES_FILE
+from .exceptions import IPDiscoveryError
 
 logger = logging.getLogger(__name__)
 
@@ -19,11 +19,11 @@ class DHCPEntry:
     """Holds a parsed DHCP entry."""
 
     def __init__(self):
-        self.name: Optional[str] = None
-        self.ip_address: Optional[str] = None
-        self.hw_address: Optional[str] = None
-        self.identifier: Optional[str] = None
-        self.lease: Optional[str] = None
+        self.name: str | None = None
+        self.ip_address: str | None = None
+        self.hw_address: str | None = None
+        self.identifier: str | None = None
+        self.lease: str | None = None
 
     def __repr__(self) -> str:
         return (
@@ -50,7 +50,7 @@ class IPDiscovery:
         """Normalize MAC address by trimming leading zeros."""
         return LEADING_ZERO_REGEXP.sub(r"\1", mac.lower())
 
-    async def discover_ip(self) -> Optional[str]:
+    async def discover_ip(self) -> str | None:
         """
         Discover IP address for the configured MAC address.
 
@@ -68,19 +68,20 @@ class IPDiscovery:
 
             for entry in entries:
                 if entry.hw_address == self.mac_address:
-                    logger.debug(
-                        f"Found IP {entry.ip_address} for MAC {self.mac_address}"
-                    )
+                    logger.debug(f"Found IP {entry.ip_address} for MAC {self.mac_address}")
                     return entry.ip_address
 
             logger.debug(f"No IP found for MAC {self.mac_address}")
             return None
 
-        except Exception as e:
-            logger.error(f"Failed to discover IP for MAC {self.mac_address}: {e}")
+        except (OSError, IOError) as e:
+            logger.error(f"Failed to read DHCP leases file {self.leases_file}: {e}")
             return None
+        except Exception as e:
+            logger.error(f"Unexpected error discovering IP for MAC {self.mac_address}: {e}")
+            raise IPDiscoveryError(f"IP discovery failed: {e}") from e
 
-    def _parse_dhcp_leases(self, content: str) -> List[DHCPEntry]:
+    def _parse_dhcp_leases(self, content: str) -> list[DHCPEntry]:
         """
         Parse DHCP leases file content.
 

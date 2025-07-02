@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 import sys
 
 from .config import VMConfig
@@ -21,8 +22,8 @@ def setup_logging(debug: bool = False) -> None:
 async def main() -> int:
     """Main CLI entry point."""
     try:
-        # Load configuration from environment
-        config = VMConfig()
+        config_file_env = os.getenv("VIRBY_VM_CONFIG_FILE")
+        config = VMConfig(config_path=config_file_env)
 
         # Setup logging based on config
         setup_logging(config.debug_enabled)

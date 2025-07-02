@@ -1,7 +1,13 @@
 """Virby VM runner package."""
 
-# Only expose the main public interface
-# Internal modules can be imported directly if needed
+from .exceptions import (
+    IPDiscoveryError,
+    SSHConnectivityError,
+    VirbyVMError,
+    VMConfigurationError,
+    VMRuntimeError,
+    VMStartupError,
+)
 
 __version__ = "0.1.0"
 
@@ -20,4 +26,12 @@ def __getattr__(name):
     raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
 
-__all__ = ["VirbyVMRunner"]
+__all__ = [
+    "VirbyVMRunner",
+    "VirbyVMError",
+    "VMConfigurationError",
+    "VMStartupError",
+    "VMRuntimeError",
+    "IPDiscoveryError",
+    "SSHConnectivityError",
+]
