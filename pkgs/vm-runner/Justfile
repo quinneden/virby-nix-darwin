@@ -1,3 +1,5 @@
+VIRBY_VM_CONFIG_FILE := absolute_path("test_artifacts/config.json")
+
 default: help
 
 help:
@@ -16,11 +18,13 @@ clean:
     @echo "Cleaning cache dirs..."
     @rm -rf dist build *.egg-info
     @find . -type d \
-      -not -path "*/.venv/*" \
-      -name "__pycache__" -or \
-      -name "*.egg-info" -or \
-      -name ".*_cache" \
-      -exec rm -rf {} + 2>/dev/null || true
+      -not -path "*/.venv/*" "(" \
+        -name "*.egg-info" -or \
+        -name ".*_cache" -or \
+        -name "__pycache__" -or \
+        -name "build" -or \
+        -name "dist" \
+      ")" -exec rm -rf {} + 2>/dev/null || true
 
 dev-setup:
     @echo "Setting up development environment..."
@@ -47,12 +51,12 @@ build:
 
 test-config:
     @echo "Validating test configuration..."
-    @python3 -c "import json; json.load(open('test-config.json')); print('Test config is valid JSON')"
+    @python3 -c "import json; json.load(open('{{ VIRBY_VM_CONFIG_FILE }}')); print('Test config is valid JSON')"
 
 run: test-config
     @echo "Running vm-runner with test config..."
     @echo "Note: This requires proper VM setup and will fail without disk images"
-    @VIRBY_VM_CONFIG_FILE=test-config.json uv run vm-runner
+    @VIRBY_VM_CONFIG_FILE={{ VIRBY_VM_CONFIG_FILE }} uv run vm-runner
 
 check: lint type-check
     @echo "All checks passed!"
