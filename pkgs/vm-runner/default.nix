@@ -35,5 +35,6 @@ buildPythonPackage {
     homepage = "https://github.com/quinneden/virby-nix-darwin";
     license = licenses.mit;
     platforms = platforms.darwin;
+    mainProgram = "virby-vm";
   };
 }

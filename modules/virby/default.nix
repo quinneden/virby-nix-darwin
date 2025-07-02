@@ -217,10 +217,11 @@ in
           gnugrep
           nix
           openssh
+          self.packages.${pkgs.hostPlatform.system}.vm-runner
         ]
       );
 
-      linuxSystem = replaceString "darwin" "linux" pkgs.stdenv.hostPlatform.system;
+      linuxSystem = replaceString "darwin" "linux" pkgs.hostPlatform.system;
 
       imageWithFinalConfig = self.packages.${linuxSystem}.vm-image.override {
         inherit (cfg)
@@ -367,9 +368,9 @@ in
           exit 1
         fi
 
-        ${logInfo} "Starting VM runner..."
+        ${logInfo} "Starting VM..."
 
-        if ! exec ${self.packages.${pkgs.system}.vm-runner}/bin/vm-runner; then
+        if ! exec virby-vm; then
           ${logError} "Failed to start the VM"
           exit 1
         fi
@@ -485,7 +486,7 @@ in
                   SockServiceName = toString cfg.port;
                 };
                 EnvironmentVariables = {
-                  VIRBY_VM_CONFIG_FILE = vmConfigJson;
+                  VIRBY_VM_CONFIG_FILE = toString vmConfigJson;
                 };
               }
               // optionalAttrs cfg.debug {
