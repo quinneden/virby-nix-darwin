@@ -25,10 +25,14 @@
         virby = import ./modules/virby { inherit _lib self; };
       };
 
-      packages = perLinuxSystem (pkgs: {
-        default = self.packages.${pkgs.system}.vm-image;
-        vm-image = pkgs.callPackage ./pkgs/vm-image { inherit _lib inputs lib; };
-      });
+      packages =
+        perDarwinSystem (pkgs: {
+          vm-runner = pkgs.python3Packages.callPackage ./pkgs/vm-runner { };
+        })
+        // perLinuxSystem (pkgs: {
+          default = self.packages.${pkgs.system}.vm-image;
+          vm-image = pkgs.callPackage ./pkgs/vm-image { inherit _lib inputs lib; };
+        });
 
       devShells = perDarwinSystem (pkgs: {
         default = pkgs.mkShell { buildInputs = [ pkgs.vfkit ]; };

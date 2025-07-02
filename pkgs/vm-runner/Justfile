@@ -1,0 +1,58 @@
+default: help
+
+help:
+    @echo "Available commands:"
+    @echo "    build          Build the Python package"
+    @echo "    clean          Clean build artifacts and cache dirs"
+    @echo "    dev-setup      Set up development environment"
+    @echo "    format         Format code with ruff and isort"
+    @echo "    help           Show this help message"
+    @echo "    lint           Run linting checks"
+    @echo "    run            Run vm-runner with test config"
+    @echo "    test-config    Validate test configuration"
+    @echo "    type-check     Run mypy type checking"
+
+clean:
+    @echo "Cleaning cache dirs..."
+    @rm -rf dist build *.egg-info
+    @find . -type d \
+      -not -path "*/.venv/*" \
+      -name "__pycache__" -or \
+      -name "*.egg-info" -or \
+      -name ".*_cache" \
+      -exec rm -rf {} + 2>/dev/null || true
+
+dev-setup:
+    @echo "Setting up development environment..."
+    @uv venv --refresh
+    @uv sync --refresh --all-groups
+
+format:
+    @echo "Formatting code..."
+    @uv run ruff format src/
+    @uv run isort src/
+
+lint:
+    @echo "Running linting checks..."
+    @uv run ruff check src/
+    @uv run isort --check-only --diff src/
+
+type-check:
+    @echo "Running type checks..."
+    @uv run mypy
+
+build:
+    @echo "Building package..."
+    @uv build
+
+test-config:
+    @echo "Validating test configuration..."
+    @python3 -c "import json; json.load(open('test-config.json')); print('Test config is valid JSON')"
+
+run: test-config
+    @echo "Running vm-runner with test config..."
+    @echo "Note: This requires proper VM setup and will fail without disk images"
+    @VIRBY_VM_CONFIG_FILE=test-config.json uv run vm-runner
+
+check: lint type-check
+    @echo "All checks passed!"
