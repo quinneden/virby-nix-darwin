@@ -2,14 +2,12 @@
 name = "vm-runner"
 version = "0.1.0"
 description = "Async VM runner for Virby"
-requires-python = ">=3.13"
+requires-python = ">=3.10"
 authors = [{ name = "Quinn Edenfield", email = "quinn@qeden.dev" }]
-dependencies = [
-  "aiofiles>=24.1.0",
-]
+dependencies = ["aiofiles>=24.1.0"]
 
 [project.scripts]
-vm-runner = "vm_runner.cli:cli_main"
+virby-vm = "vm_runner.cli:cli_main"
 
 [dependency-groups]
 lint = [
@@ -22,8 +20,11 @@ lint = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.hatch.build]
-only-packages = true
+[tool.hatch.build.targets.wheel]
+packages = ["src/vm_runner"]
+
+[tool.hatch.build.targets.sdist]
+only-include = ["src"]
 
 [tool.isort]
 ensure_newline_before_comments = true
