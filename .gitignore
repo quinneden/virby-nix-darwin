@@ -2,3 +2,24 @@
 *.bck
 .DS_Store
 result/
+pkgs/vm-runner/test_artifacts
+
+*.egg-info/
+.*_cache
+.venv/
+__pycache__/
+dist/
+build/
+
+# Test files
+test-config.json
+*.test.json
+test_*.json
+
+# IDE and editor files
+.zed/
+
+# Development artifacts
+.coverage
+.pytest_cache/
+.mypy_cache/
