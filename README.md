@@ -4,12 +4,10 @@ Virby is a module for nix-darwin that configures a lightweight linux VM as a rem
 
 ## Features
 
-- **Seamless Integration**: Automatically integrates with nix-darwin's build system
-- **On-Demand Activation**: Optional VM lifecycle management with automatic startup/shutdown
+- **On-Demand Activation**: Optional socket activation for starting the VM only when needed
 - **Rosetta Support**: Build x86_64-linux packages on Apple Silicon using Rosetta translation
-- **Secure by Default**: VM is locked down and only accessible via SSH with generated keys
-- **Configurable Resources**: Adjust CPU cores, memory, and disk size to your needs
-- **Debug Support**: Optional logging and serial console access for troubleshooting
+- **Secure by Default**: VM is exposed only on the loopback interface (i.e. `127.0.0.1`) and only accessible via key-based authentication
+- **Configurable Resources**: Configurable VM parameters and arbitrary NixOS modules
 
 ## Architecture
 
@@ -17,7 +15,7 @@ Virby consists of three main components:
 
 1. **nix-darwin Module** (`modules/virby`) - Provides system integration and configuration
 2. **VM Image** (`pkgs/vm-image`) - A minimal NixOS image, configured for use as a remote builder.
-3. **VM Runner** (`pkgs/vm-runner`) - Python package that wraps `vfkit` and manages the VM lifecycle and IP discovery.
+3. **VM Runner** (`pkgs/vm-runner`) - Python package that wraps `vfkit` and manages the VM lifecycle and SSH proxying.
 
 ## Installation
 
@@ -34,7 +32,7 @@ Add Virby to your flake inputs:
     };
   };
 
-  # Add the module to your nix-darwin configuration
+  # Import the module
   outputs =
     { virby, ... }:
     {
@@ -44,7 +42,7 @@ Add Virby to your flake inputs:
     };
 }
 ```
-
+ 
 ## Configuration
 
 ### Basic Configuration
@@ -53,14 +51,14 @@ Add Virby to your flake inputs:
 services.virby = {
   enable = true;
   cores = 8;            # CPU cores for the VM
-  memory = 6144;        # Memory allocation in MiB (can be int or string like: "6GiB")
+  memory = 6144;        # Memory allocation in MiB (can be int or string like: `"6GiB"`)
   diskSize = "100GiB";  # Disk size in GiB
 };
 ```
 
-### On Demand Activation
+### On Demand Activation with Port Forwarding
 
-Enable on-demand VM activation:
+Enable on-demand VM activation with automatic SSH port forwarding:
 
 ```nix
 services.virby = {
@@ -70,6 +68,13 @@ services.virby = {
   };
 };
 ```
+
+When `onDemand.enable` is true, Virby implements socket activation with TCP port forwarding:
+
+- **On-demand VM Startup**: The VM starts only when an SSH connection is received on the configured host port (`31222` by default)
+- **TCP Proxy**: All traffic is transparently forwarded between the host port and the VM's SSH service
+- **Resource Efficiency**: VM consumes no resources when not in use
+- **Automatic VM Shutdown**: VM shuts down after the specified idle timeout (`onDemand.ttl`)
 
 ### Rosetta Support
 
@@ -84,7 +89,7 @@ services.virby = {
 };
 ```
 
-### Additional NixOS module configuration
+### Additional NixOS configuration modules
 
 > [!NOTE]
 > This option allows you to specify additional arbitrary NixOS module configuration. Any changes to this option's value will cause the VM's disk image and SSH keys to be recreated.
@@ -116,21 +121,22 @@ services.virby = {
 
 ## How It Works
 
-1. **VM Creation**: Virby builds a minimal NixOS image optimized for building
-2. **Key Generation**: SSH keys are automatically generated for secure access
-3. **VM Startup**: The VM runner daemon starts the VM using vfkit
+1. **Image Creation**: Nix builds a minimal raw-efi NixOS disk image
+2. **Key Generation**: SSH keys are automatically generated and copied to the VM on first boot
+3. **VM Startup**: The Launchd daemon starts the VM (either at load or on-demand)
 4. **IP Discovery**: VM's IP address is discovered via DHCP lease parsing
-5. **Build Integration**: Nix automatically routes Linux builds to the VM
-6. **Lifecycle Management**: VM can be kept running or managed on-demand
+5. **Port Forwarding**: In on-demand mode, launchd socket activation triggers VM startup and TCP proxy
+6. **Build Integration**: The Nix-darwin module configures the VM as a build machine, routing Linux builds to the VM
+7. **Lifecycle Management**: VM can be kept running or managed on-demand with automatic shutdown after a period of inactivity
 
 ## Security
 
 Virby is designed with security in mind:
 
-- VM has no network access except through the host
-- SSH access uses generated ED25519 keys
+- VM is only accessible from the host via the loopback interface (i.e. `127.0.0.1`)
+- SSH uses ED25519 key-based authentication
 - VM user has minimal privileges for building only
-- Host keys are protected using virtiofs mount/unmount
+- Host keys are protected using virtiofs mount/unmount on first boot
 - VM is isolated from the host filesystem
 
 ## License

@@ -2,7 +2,7 @@
   pkgs ? import <nixpkgs> { },
 }:
 pkgs.mkShellNoCC {
-  name = "vm-runner";
+  name = "virby-vm-runner";
   packages = with pkgs; [
     gvproxy
     vfkit

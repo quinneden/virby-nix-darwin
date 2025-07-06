@@ -8,7 +8,6 @@ from typing import Any, Dict
 
 from .constants import (
     DEFAULT_IP_DISCOVERY_TIMEOUT,
-    DEFAULT_SSH_PORT,
     DEFAULT_SSH_READY_TIMEOUT,
     DEFAULT_WORKING_DIRECTORY,
     VM_SSH_USER,
@@ -76,7 +75,7 @@ class VMConfig:
         self._debug = debug
 
         # Validate and store port
-        port = self._config.get("port", DEFAULT_SSH_PORT)
+        port = self._config.get("port", None)
         if not isinstance(port, int) or port < 1 or port > 65535:
             raise VMConfigurationError(
                 f"Invalid port: {port}. Expected: integer between 1 and 65535"

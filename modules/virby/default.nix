@@ -7,7 +7,6 @@
 }:
 let
   inherit (_lib.constants)
-    name
     sshHostPrivateKeyFileName
     sshHostPublicKeyFileName
     sshUserPrivateKeyFileName
@@ -44,7 +43,7 @@ let
 in
 {
   options.services.virby = {
-    enable = mkEnableOption "${name}, a vfkit-based linux builder for nix-darwin";
+    enable = mkEnableOption "Virby, a vfkit-based linux builder for nix-darwin";
 
     allowUserSsh = mkOption {
       type = types.bool;
@@ -235,23 +234,23 @@ in
       baseDiskPath = "${workingDirectory}/base.img";
       diffDiskPath = "${workingDirectory}/diff.img";
       imageFileName = replaceString ".raw" ".img" imageWithFinalConfig.passthru.filePath;
-      sourceImage = "${imageWithFinalConfig}/${imageFileName}";
+      sourceImagePath = "${imageWithFinalConfig}/${imageFileName}";
 
       memoryMib = if isString cfg.memory then parseMemoryString cfg.memory else cfg.memory;
-      sshdKeysSharedDirName = "vm-sshd-keys";
+      sshdKeysSharedDirName = "vm_sshd_keys";
       sshHostKeyAlias = "${vmHostName}-key";
 
-      daemonName = "${name}d";
-      workingDirectory = "/var/lib/${name}";
+      daemonName = "virbyd";
+      workingDirectory = "/var/lib/virby";
 
       darwinGid = 348;
-      darwinGroup = "${name}";
+      darwinGroup = "virby";
       darwinUid = darwinGid;
       darwinUser = "_${darwinGroup}";
       groupPath = "/Groups/${darwinGroup}";
       userPath = "/Users/${darwinUser}";
 
-      vmConfigJson = pkgs.writeText "${name}-vm-config.json" (
+      vmConfigJson = pkgs.writeText "virby-vm-config.json" (
         builtins.toJSON {
           memory = memoryMib;
           inherit (cfg)
@@ -316,7 +315,7 @@ in
         umask 'g-w,o='
         chmod 'g-w,o=x' .
 
-        sourceImageHash=$(nix hash file ${sourceImage} 2>/dev/null)
+        sourceImageHash=$(nix hash file ${sourceImagePath} 2>/dev/null)
         baseDiskHash=$(nix hash file ${baseDiskPath} 2>/dev/null) || true
 
         if [[ $sourceImageHash != $baseDiskHash || ! -f ${diffDiskPath} ]]; then
@@ -324,7 +323,7 @@ in
 
           rm -f ${baseDiskPath} ${diffDiskPath}
 
-          if ! cp ${sourceImage} ${baseDiskPath}; then
+          if ! cp ${sourceImagePath} ${baseDiskPath}; then
             ${logError} "Failed to copy base disk image to ${baseDiskPath}"
             exit 1
           fi
@@ -485,9 +484,10 @@ in
                   SockNodeName = "localhost";
                   SockServiceName = toString cfg.port;
                 };
+
                 EnvironmentVariables = {
                   VIRBY_VM_CONFIG_FILE = toString vmConfigJson;
-                };
+                } // optionalAttrs cfg.onDemand.enable { VIRBY_SOCKET_ACTIVATION = "1"; };
               }
               // optionalAttrs cfg.debug {
                 StandardErrorPath = "/tmp/${daemonName}.stderr.log";

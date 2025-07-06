@@ -20,14 +20,14 @@ buildPythonPackage {
   ];
 
   pythonImportsCheck = [
-    "vm_runner"
-    "vm_runner.cli"
-    "vm_runner.config"
-    "vm_runner.constants"
-    "vm_runner.exceptions"
-    "vm_runner.ip_discovery"
-    "vm_runner.runner"
-    "vm_runner.ssh"
+    "virby_vm_runner"
+    "virby_vm_runner.cli"
+    "virby_vm_runner.config"
+    "virby_vm_runner.constants"
+    "virby_vm_runner.exceptions"
+    "virby_vm_runner.ip_discovery"
+    "virby_vm_runner.runner"
+    "virby_vm_runner.ssh"
   ];
 
   meta = with lib; {
