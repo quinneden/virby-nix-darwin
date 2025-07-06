@@ -1,0 +1,42 @@
+# Build and cache the VM disk image
+
+name: Build vm-image
+
+on:
+  push:
+    branches: [main]
+    paths: [pkgs/vm-image/*]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build ${{ matrix.arch }}
+    strategy:
+      matrix:
+        include:
+          - arch: aarch64-linux
+            runner: ubuntu-24.04-arm
+          - arch: x86_64-linux
+            runner: ubuntu-latest
+      fail-fast: false
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - uses: actions/checkout@v4.2.2
+
+      - name: Set up Nix
+        uses: cachix/install-nix-action@v31.4.1
+        with:
+          enable_kvm: true
+          extra_nix_config: "system-features = benchmark big-parallel kvm nixos-test uid-range"
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Cachix
+        uses: cachix/cachix-action@v16
+        with:
+          name: virby-nix-darwin
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Build vm-image (${{ matrix.arch }})
+        run: nix build -L .#packages.${{ matrix.arch }}.vm-image
