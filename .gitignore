@@ -14,7 +14,7 @@ result/
 
 # Testing
 .env
-pkgs/vm-runner/test_artifacts/
+test/
 
 # Misc
 *.bak
@@ -22,3 +22,4 @@ pkgs/vm-runner/test_artifacts/
 .direnv/
 .DS_Store
 .zed/
+.rules
