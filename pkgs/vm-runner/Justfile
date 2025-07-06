@@ -1,4 +1,6 @@
-VIRBY_VM_CONFIG_FILE := env("VIRBY_VM_CONFIG_FILE")
+VIRBY_VM_CONFIG_FILE := env("VIRBY_VM_CONFIG_FILE", "")
+TEST_DIRECTORY := absolute_path("../../test")
+TEST_WORKING_DIRECTORY := TEST_DIRECTORY + "/working_directory"
 
 default: help
 
@@ -38,7 +40,7 @@ format:
 
 lint:
     @echo "Running linting checks..."
-    @uv run ruff check src/
+    @uv run ruff check --fix src/
     @uv run isort --check-only --diff src/
 
 type-check:
@@ -48,6 +50,20 @@ type-check:
 build:
     @echo "Building package..."
     @uv build
+
+setup-test-working-directory:
+    #!/usr/bin/env bash
+    echo "Setting up test working directory..."
+    rm -rf "{{ TEST_WORKING_DIRECTORY }}"
+    mkdir -p "{{ TEST_WORKING_DIRECTORY }}/vm_sshd_keys"
+    ssh-keygen -C _virby@darwin -f "{{ TEST_WORKING_DIRECTORY }}/ssh_user_ed25519_key" -N "" -t ed25519
+    ssh-keygen -C root@virby-vm -f "{{ TEST_WORKING_DIRECTORY }}/ssh_host_ed25519_key" -N "" -t ed25519
+    mv "{{ TEST_WORKING_DIRECTORY }}"/{ssh_host_ed25519_key,ssh_user_ed25519_key.pub} "{{ TEST_WORKING_DIRECTORY }}/vm_sshd_keys"
+    echo "virby-vm-key $(cat "{{ TEST_WORKING_DIRECTORY }}/ssh_host_ed25519_key.pub")" > "{{ TEST_WORKING_DIRECTORY }}/ssh_known_hosts"
+    cp $(nix build --no-link --print-out-paths ../..#packages.aarch64-linux.vm-image)/nixos-*.img "{{ TEST_WORKING_DIRECTORY }}/base.img"
+    chmod 644 "{{ TEST_WORKING_DIRECTORY }}/base.img"
+    cp --reflink=always "{{ TEST_WORKING_DIRECTORY }}/base.img" "{{ TEST_WORKING_DIRECTORY }}/diff.img"
+    truncate -s 100G "{{ TEST_WORKING_DIRECTORY }}/diff.img"
 
 test-config:
     @echo "Validating test configuration..."
