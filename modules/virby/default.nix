@@ -7,7 +7,6 @@
 }:
 let
   inherit (_lib.constants)
-    name
     sshHostPrivateKeyFileName
     sshHostPublicKeyFileName
     sshUserPrivateKeyFileName
@@ -24,8 +23,6 @@ let
     ;
 
   inherit (lib)
-    concatStringsSep
-    getExe
     isString
     makeBinPath
     mkAfter
@@ -38,17 +35,15 @@ let
     mkOption
     optional
     optionalAttrs
-    optionals
-    optionalString
     replaceString
     types
     ;
 
-  cfg = config.services.virb;
+  cfg = config.services.virby;
 in
 {
   options.services.virby = {
-    enable = mkEnableOption "${name}, a vfkit-based linux builder for nix-darwin";
+    enable = mkEnableOption "Virby, a vfkit-based linux builder for nix-darwin";
 
     allowUserSsh = mkOption {
       type = types.bool;
@@ -57,7 +52,7 @@ in
         Whether to allow non-root users to SSH into the VM.
 
         This is useful for debugging, but it means that any user on the host machine can ssh into
-        the VM without requiring root privileges, which could pose a security risk.
+        the VM without root privileges, which could pose a security risk.
       '';
     };
 
@@ -89,8 +84,7 @@ in
       description = ''
         The size of the disk image for the VM.
 
-        This must be specified as a string in the format: "xGiB" or "xG", where "x" is a number of
-        gibibytes (GiB).
+        The option value must be a string with a number, followed by the suffix "GiB".
       '';
     };
 
@@ -120,8 +114,8 @@ in
       description = ''
         The amount of memory to allocate to the VM in MiB.
 
-        This can be specified as either: an integer representing an amount in MiB, e.g., `6144`, or a
-        string, e.g. `"6GiB"`.
+        This can be specified as either: an integer representing an amount in MiB, e.g., `6144`, or
+        a string, e.g., `"6GiB"`.
       '';
     };
 
@@ -161,8 +155,8 @@ in
         the VM to start, and once an SSH connection can be established, the VM continues the build.
         After a period of time passes in which the VM stays idle, it will shut down.
 
-        By default, the VM waits 3 hours before shutting down, but this can be configured with a
-        different value by specifying `onDemand.ttl`.
+        By default, the VM waits 3 hours before shutting down, but this can be configured using the
+        option `onDemand.ttl`.
       '';
     };
 
@@ -222,10 +216,12 @@ in
           gnugrep
           nix
           openssh
+          self.packages.${pkgs.hostPlatform.system}.vm-runner
         ]
       );
 
-      linuxSystem = replaceString "darwin" "linux" pkgs.system;
+      linuxSystem = replaceString "darwin" "linux" pkgs.hostPlatform.system;
+
       imageWithFinalConfig = self.packages.${linuxSystem}.vm-image.override {
         inherit (cfg)
           debug
@@ -238,88 +234,38 @@ in
       baseDiskPath = "${workingDirectory}/base.img";
       diffDiskPath = "${workingDirectory}/diff.img";
       imageFileName = replaceString ".raw" ".img" imageWithFinalConfig.passthru.filePath;
-      sourceImage = "${imageWithFinalConfig}/${imageFileName}";
+      sourceImagePath = "${imageWithFinalConfig}/${imageFileName}";
 
       memoryMib = if isString cfg.memory then parseMemoryString cfg.memory else cfg.memory;
-      networkSocketPath = "${workingDirectory}/${vmHostName}-network.sock";
-      serialLogFile = "/tmp/${vmHostName}.serial.log";
-      sshdKeysSharedDirName = "vm-sshd-keys";
+      sshdKeysSharedDirName = "vm_sshd_keys";
       sshHostKeyAlias = "${vmHostName}-key";
 
-      daemonName = "${name}d";
-      gvproxyDaemonName = "${name}-gvproxyd";
-      workingDirectory = "/var/lib/${name}";
+      daemonName = "virbyd";
+      workingDirectory = "/var/lib/virby";
 
       darwinGid = 348;
-      darwinGroup = "${name}";
+      darwinGroup = "virby";
       darwinUid = darwinGid;
       darwinUser = "_${darwinGroup}";
       groupPath = "/Groups/${darwinGroup}";
       userPath = "/Users/${darwinUser}";
 
-      vfkitCommand = concatStringsSep " " (
-        [
-          (getExe pkgs.vfkit)
-          "--cpus"
-          (toString cfg.cores)
-          "--memory"
-          (toString memoryMib)
-          "--bootloader"
-          "efi,variable-store=${workingDirectory}/efistore.nvram,create"
-          "--device"
-          "virtio-blk,path=${diffDiskPath}"
-          "--device"
-          "virtio-fs,sharedDir=${workingDirectory}/${sshdKeysSharedDirName},mountTag=sshd-keys"
-          "--device"
-          "virtio-net,unixSocketPath=${networkSocketPath},mac=5a:94:ef:e4:0c:ee" # MAC address expected by gvproxy
-          "--device"
-          "virtio-balloon"
-          "--device"
-          "virtio-rng"
-        ]
-        ++ optionals cfg.debug [
-          "--device"
-          "virtio-serial,logFilePath=${serialLogFile}"
-        ]
-        ++ optionals cfg.rosetta.enable [
-          "--device"
-          "rosetta,mountTag=rosetta"
-        ]
+      vmConfigJson = pkgs.writeText "virby-vm-config.json" (
+        builtins.toJSON {
+          memory = memoryMib;
+          inherit (cfg)
+            debug
+            cores
+            rosetta
+            port
+            ;
+        }
       );
 
       runnerScript = pkgs.writeShellScript "${daemonName}-runner" ''
         PATH=${binPath}:$PATH
 
         set -euo pipefail
-
-        check_gvproxyd_status() {
-          local pid=$(launchctl list | grep "org.nixos.${gvproxyDaemonName}" | cut -f1) || return 2
-          grep -qE "^[0-9]{1,5}$" <<< "$pid" || return 1
-        }
-
-        kickstart_gvproxyd() {
-          if ! launchctl kickstart "system/org.nixos.${gvproxyDaemonName}"; then
-            ${logError} "Failed to kickstart ${gvproxyDaemonName}"
-            return 1
-          fi
-          ${logInfo} "Successfully kickstarted ${gvproxyDaemonName}"
-        }
-
-        bootstrap_gvproxyd() {
-          local plist="/Library/LaunchDaemons/org.nixos.${gvproxyDaemonName}.plist"
-
-          if [[ ! -f $plist ]]; then
-            ${logError} "file not found: $plist"
-            return 1
-          fi
-
-          if ! launchctl bootstrap system "$plist"; then
-            ${logError} "Failed to bootstrap ${gvproxyDaemonName}"
-            return 1
-          fi
-
-          ${logInfo} "Successfully bootstrapped ${gvproxyDaemonName}"
-        }
 
         should_keygen() {
           local key_files=(
@@ -369,7 +315,7 @@ in
         umask 'g-w,o='
         chmod 'g-w,o=x' .
 
-        sourceImageHash=$(nix hash file ${sourceImage} 2>/dev/null)
+        sourceImageHash=$(nix hash file ${sourceImagePath} 2>/dev/null)
         baseDiskHash=$(nix hash file ${baseDiskPath} 2>/dev/null) || true
 
         if [[ $sourceImageHash != $baseDiskHash || ! -f ${diffDiskPath} ]]; then
@@ -377,7 +323,7 @@ in
 
           rm -f ${baseDiskPath} ${diffDiskPath}
 
-          if ! cp ${sourceImage} ${baseDiskPath}; then
+          if ! cp ${sourceImagePath} ${baseDiskPath}; then
             ${logError} "Failed to copy base disk image to ${baseDiskPath}"
             exit 1
           fi
@@ -421,39 +367,9 @@ in
           exit 1
         fi
 
-        sleep_interval=1
-        max_retries=5
+        ${logInfo} "Starting VM..."
 
-        ${logInfo} "Starting monitoring loop for ${gvproxyDaemonName}"
-
-        while true; do
-          check_gvproxyd_status && break
-          status=$?
-          case "$status" in
-            1)
-              ${logInfo} "${gvproxyDaemonName} is loaded but not running, kickstarting..."
-              retry_count=0
-
-              while [[ $retry_count -lt $max_retries ]]; do
-                kickstart_gvproxyd && break 2
-                sleep "$sleep_interval"
-                retry_count=$((++retry_count))
-                sleep_interval=$((sleep_interval * 2))
-              done
-
-              ${logInfo} "Failed to start ${gvproxyDaemonName} after $max_retries attempts"
-              exit 1
-              ;;
-            2)
-              ${logInfo} "${gvproxyDaemonName} is not loaded, bootstrapping..."
-              bootstrap_gvproxyd
-              ;;
-          esac
-        done
-
-        ${logInfo} "Starting VM with command: ${vfkitCommand}"
-
-        if ! exec ${vfkitCommand}; then
+        if ! exec virby-vm; then
           ${logError} "Failed to start the VM"
           exit 1
         fi
@@ -553,39 +469,6 @@ in
         '';
 
         launchd.daemons = {
-          ${gvproxyDaemonName} = {
-            path = [
-              (pkgs.gvproxy.overrideAttrs {
-                version = "v0.0.0-20241221210737-111901fedac7";
-                src = pkgs.fetchFromGitHub {
-                  owner = "cpick";
-                  repo = "gvisor-tap-vsock";
-                  rev = "111901fedac7429bb2cb003fe8e05768e911d054";
-                  hash = "sha256-APL8EdceAOMHW1IwN0TfOs2ZabwbhJZWLBziWG1/Xdw=";
-                };
-              })
-            ];
-
-            script = concatStringsSep " " [
-              "exec"
-              "2>&1"
-              "gvproxy"
-              (optionalString cfg.debug "-debug")
-              "-listen-vfkit"
-              ("unixgram://" + networkSocketPath)
-              "-ssh-port"
-              (toString cfg.port)
-            ];
-
-            serviceConfig = {
-              UserName = darwinUser;
-              WorkingDirectory = workingDirectory;
-              RunAtLoad = true;
-              KeepAlive = true;
-              ProcessType = "Background";
-            } // optionalAttrs cfg.debug { StandardOutPath = "/tmp/${gvproxyDaemonName}.stdout.log"; };
-          };
-
           ${daemonName} = {
             path = [ "/bin" ];
             command = runnerScript;
@@ -601,6 +484,10 @@ in
                   SockNodeName = "localhost";
                   SockServiceName = toString cfg.port;
                 };
+
+                EnvironmentVariables = {
+                  VIRBY_VM_CONFIG_FILE = toString vmConfigJson;
+                } // optionalAttrs cfg.onDemand.enable { VIRBY_SOCKET_ACTIVATION = "1"; };
               }
               // optionalAttrs cfg.debug {
                 StandardErrorPath = "/tmp/${daemonName}.stderr.log";

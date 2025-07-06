@@ -1,4 +1,25 @@
+# Python
+*.egg-info/
+*.test.json
+.*_cache
+.coverage
+.mypy_cache/
+.pytest_cache/
+.venv/
+__pycache__/
+dist/
+
+# Nix
+result/
+
+# Testing
+.env
+test/
+
+# Misc
 *.bak
 *.bck
+.direnv/
 .DS_Store
-result/
+.zed/
+.rules
