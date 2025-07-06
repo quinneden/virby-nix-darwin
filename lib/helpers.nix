@@ -1,6 +1,7 @@
+# Helper functions for the module
 { constants, lib }:
 let
-  inherit (constants) name vmHostName;
+  inherit (constants) vmHostName;
 
   ESC = builtins.fromJSON ''"\u001b"'';
   GREEN = "${ESC}[32m";
@@ -12,11 +13,11 @@ let
 
   setupLogFunctions = ''
     logInfo() {
-      echo -e "${GREEN}[${name}]${RESET} $*" >&2
+      echo -e "${GREEN}[virby]${RESET} $*" >&2
     }
 
     logError() {
-      echo -e "${RED}[${name}]${RESET} $*" >&2
+      echo -e "${RED}[virby]${RESET} $*" >&2
     }
   '';
 

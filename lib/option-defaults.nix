@@ -1,3 +1,4 @@
+# Default values for the module options
 let
   debug = false;
   extraConfig = { };
