@@ -1,6 +1,6 @@
 # Virby - Linux Builder for Nix-darwin
 
-Build Linux packages on macOS using a lightweight virtual machine integrated with nix-darwin.
+Virby is a module for nix-darwin that configures a lightweight, vfkit-based linux VM as a remote build machine for nix, allowing linux packages to be built on macOS. This project is modeled after nix-rosetta-builder, which provides a similar service, using lima to manage the VM. Some parts of the code in this repository are directly borrowed and adapted from that project.
 
 ## Quick Start
 
