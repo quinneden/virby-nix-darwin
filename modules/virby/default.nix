@@ -220,7 +220,7 @@ in
         ]
       );
 
-      linuxSystem = replaceString "darwin" "linux" pkgs.hostPlatform.system;
+      linuxSystem = replaceString "darwin" "linux" pkgs.system;
 
       imageWithFinalConfig = self.packages.${linuxSystem}.vm-image.override {
         inherit (cfg)
