@@ -216,7 +216,7 @@ in
           gnugrep
           nix
           openssh
-          self.packages.${pkgs.hostPlatform.system}.vm-runner
+          self.packages.${system}.vm-runner
         ]
       );
 
