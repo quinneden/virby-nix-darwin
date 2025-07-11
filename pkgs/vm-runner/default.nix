@@ -7,7 +7,7 @@
 }:
 
 buildPythonPackage {
-  pname = "virby-vm";
+  pname = "virby-vm-runner";
   version = "0.1.0";
 
   pyproject = true;
