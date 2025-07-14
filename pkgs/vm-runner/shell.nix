@@ -3,8 +3,5 @@
 }:
 pkgs.mkShellNoCC {
   name = "virby-vm-runner";
-  packages = with pkgs; [
-    gvproxy
-    vfkit
-  ];
+  packages = with pkgs; [ vfkit ];
 }
