@@ -55,16 +55,20 @@ in
     channel.enable = false;
     registry.nixpkgs.flake = inputs.nixpkgs;
 
-    settings = {
-      auto-optimise-store = true;
-      experimental-features = [
-        "flakes"
-        "nix-command"
-      ];
-      min-free = "5G";
-      max-free = "7G";
-      trusted-users = [ vmUser ];
-    };
+    settings =
+      let
+        gibibyte = 1024 * 1024 * 1024;
+      in
+      {
+        auto-optimise-store = true;
+        experimental-features = [
+          "flakes"
+          "nix-command"
+        ];
+        min-free = gibibyte * 5;
+        max-free = gibibyte * 7;
+        trusted-users = [ vmUser ];
+      };
   };
 
   security.sudo = {
