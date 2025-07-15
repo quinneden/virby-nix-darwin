@@ -297,10 +297,10 @@ in
         umask 'g-w,o='
         chmod 'g-w,o=x' .
 
-        sourceImageHash=$(nix hash file ${sourceImagePath} 2>/dev/null)
-        baseDiskHash=$(nix hash file ${baseDiskPath} 2>/dev/null) || true
+        source_image_path_marker="${workingDirectory}/.disk-image-store-path"
+        current_source_image_path=$(cat $source_image_path_marker 2>/dev/null) || true
 
-        if [[ $sourceImageHash != $baseDiskHash || ! -f ${diffDiskPath} ]]; then
+        if [[ ! -f ${diffDiskPath} ]] || [[ $current_source_image_path != ${imageWithFinalConfig} ]]; then
           ${logInfo} "Creating base/diff disk images..."
 
           rm -f ${baseDiskPath} ${diffDiskPath}
@@ -322,6 +322,8 @@ in
             exit 1
           fi
           ${logInfo} "Resized diff disk to ${cfg.diskSize}"
+
+          echo ${imageWithFinalConfig} > $source_image_path_marker
         fi
 
         if should_keygen; then
