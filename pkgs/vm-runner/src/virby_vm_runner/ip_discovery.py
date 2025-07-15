@@ -68,7 +68,9 @@ class IPDiscovery:
 
             for entry in entries:
                 if entry.hw_address == self.mac_address:
-                    logger.debug(f"Found IP {entry.ip_address} for MAC {self.mac_address}")
+                    logger.debug(
+                        f"Found IP {entry.ip_address} for MAC {self.mac_address}"
+                    )
                     return entry.ip_address
 
             logger.debug(f"No IP found for MAC {self.mac_address}")
@@ -78,7 +80,9 @@ class IPDiscovery:
             logger.error(f"Failed to read DHCP leases file {self.leases_file}: {e}")
             return None
         except Exception as e:
-            logger.error(f"Unexpected error discovering IP for MAC {self.mac_address}: {e}")
+            logger.error(
+                f"Unexpected error discovering IP for MAC {self.mac_address}: {e}"
+            )
             raise IPDiscoveryError(f"IP discovery failed: {e}") from e
 
     def _parse_dhcp_leases(self, content: str) -> list[DHCPEntry]:

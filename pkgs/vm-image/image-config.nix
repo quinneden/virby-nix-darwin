@@ -1,20 +1,13 @@
 {
   _lib,
   cfg,
+  config,
   inputs,
   lib,
   pkgs,
   ...
 }:
 let
-  inherit (lib)
-    mkForce
-    optional
-    optionalAttrs
-    trivial
-    versions
-    ;
-
   inherit (_lib.constants)
     sshHostPrivateKeyFileName
     sshUserPublicKeyFileName
@@ -26,6 +19,8 @@ let
   sshHostPrivateKeyPath = sshDirPath + sshHostPrivateKeyFileName;
 in
 {
+  imports = [ "${inputs.nixpkgs}/nixos/modules/image/file-options.nix" ];
+
   boot = {
     kernelParams = [ "console=hvc0" ];
     loader = {
@@ -49,7 +44,12 @@ in
     ];
   };
 
-  networking.hostName = mkForce vmHostName;
+  image = lib.mkForce {
+    baseName = "virby-vm-nixos-image-${config.system.nixos.label}-${pkgs.stdenv.hostPlatform.system}";
+    extension = "img";
+  };
+
+  networking.hostName = lib.mkForce vmHostName;
 
   nix = {
     channel.enable = false;
@@ -73,9 +73,9 @@ in
   };
 
   services = {
-    getty = optionalAttrs cfg.debug { autologinUser = vmUser; };
+    getty = lib.optionalAttrs cfg.debug { autologinUser = vmUser; };
 
-    logind = optionalAttrs cfg.onDemand.enable {
+    logind = lib.optionalAttrs cfg.onDemand.enable {
       extraConfig = ''
         IdleAction=poweroff
         IdleActionSec=${toString cfg.onDemand.ttl}minutes
@@ -95,7 +95,7 @@ in
 
   system = {
     disableInstallerTools = true;
-    stateVersion = versions.majorMinor trivial.version;
+    stateVersion = lib.versions.majorMinor lib.version;
   };
 
   # Virtualization.framework's virtiofs implementation will grant any guest user access
@@ -158,7 +158,7 @@ in
 
     users.${vmUser} = {
       isNormalUser = true;
-      extraGroups = optional cfg.debug "wheel";
+      extraGroups = lib.optional cfg.debug "wheel";
     };
   };
 

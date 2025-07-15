@@ -54,7 +54,6 @@ class VirbyVMRunner:
 
     def _detect_socket_activation(self) -> bool:
         """Detect if we're running under launchd socket activation."""
-        # Check for our custom environment variable set by nix-darwin module
         is_activated = os.environ.get("VIRBY_SOCKET_ACTIVATION") == "1"
         if is_activated:
             logger.debug("Socket activation detected via VIRBY_SOCKET_ACTIVATION=1")
@@ -62,7 +61,7 @@ class VirbyVMRunner:
         return is_activated
 
     def _call_launch_activate_socket(self, socket_name: str) -> list[int]:
-        """Use launch_activate_socket C API to get socket file descriptors."""
+        """Use launch_activate_socket to get socket file descriptors."""
         try:
             # Load the System library which contains launch_activate_socket
             libsystem = ctypes.CDLL(ctypes.util.find_library("System"))
@@ -367,8 +366,8 @@ class VirbyVMRunner:
             f"virtio-fs,sharedDir={sshd_keys},mountTag=sshd-keys",
             "--device",
             f"virtio-net,nat,mac={self.mac_address}",
-            "--restful-uri",
-            "tcp://localhost:31223",
+            # "--restful-uri",
+            # "tcp://localhost:31223",
             "--device",
             "virtio-rng",
             "--device",
