@@ -4,7 +4,7 @@ Virby is a module for [nix-darwin](https://github.com/nix-darwin/nix-darwin) tha
 
 ## Quick Start
 
-Add to your flake and enable:
+Add virby to your flake inputs:
 
 ```nix
 # flake.nix
@@ -22,17 +22,44 @@ Add to your flake and enable:
 }
 ```
 
+> [!Important]
+> When enabling Virby for the first time, you must add the binary cache to your Nix configuration. This ensures that the prebuilt VM image is available for download, rather than having to be built locally, which requires an existing `aarch64-linux` builder. You can do this in one of two ways:
+
+Run the `darwin-rebuild` command with the following options:
+```bash
+  sudo darwin-rebuild switch --flake .#myHost \
+    --option "extra-substituters" "https://virby-nix-darwin.cachix.org" \
+    --option "extra-trusted-public-keys" "virby-nix-darwin.cachix.org-1:z9GiEZeBU5bEeoDQjyfHPMGPBaIQJOOvYOOjGMKIlLo="
+```
+
+Or, add the binary cache to your configuration **before** enabling Virby:
+```nix
+  nix.settings = {
+    extra-substituters = [ "https://virby-nix-darwin.cachix.org" ];
+    extra-trusted-public-keys = [
+      "virby-nix-darwin.cachix.org-1:z9GiEZeBU5bEeoDQjyfHPMGPBaIQJOOvYOOjGMKIlLo="
+    ];
+  };
+```
+
+Then, run `darwin-rebuild`, then enable Virby:
+
 ```nix
 # configuration.nix
 services.virby = {
   enable = true;
-  cores = 8;
-  memory = "6GiB";
-  diskSize = "100GiB";
+  # Don't define any other options until after you've switched to the new configuration
+  # with virby enabled. If the configuration of the VM changes, the VM disk image hash won't
+  # match the one in the cache, and it will want to build it locally instead.
 };
 ```
 
-Then rebuild: `darwin-rebuild switch --flake .#myHost`
+Then rebuild again.
+
+As an alternative to using the binary cache, you could enable the `nix.linux-builder` option before enabling virby, then disable after switching:
+```nix
+  nix.linux-builder.enable = true;
+```
 
 ## Key Features
 
