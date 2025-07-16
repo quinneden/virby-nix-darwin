@@ -1,4 +1,5 @@
 {
+  _lib,
   lib,
   aiofiles,
   buildPythonPackage,
@@ -29,6 +30,10 @@ buildPythonPackage {
     "virby_vm_runner.runner"
     "virby_vm_runner.ssh"
   ];
+
+  preBuild = ''
+    python3 ${./generate_constants.py} '${builtins.toJSON _lib.constants}' > src/virby_vm_runner/constants.py
+  '';
 
   meta = with lib; {
     description = "Vfkit-based VM runner for Virby, with automatic IP discovery and lifecycle management";

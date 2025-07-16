@@ -1,9 +1,9 @@
 """
 Variable constants for Virby
 
-WARNING: This file's contents are overwritten as part of the nix build process. The values
-here are just for testing without building the nix package. The actual values used in the
-package are derived from _lib.constants, or ../../lib/constants.nix.
+WARNING: This file's contents are overwritten as part of the nix build process. The values here are
+just for testing without building the nix package. The actual values used in the package are
+derived from _lib.constants, or ../../lib/constants.nix.
 """
 
 WORKING_DIRECTORY = "/var/lib/virby"

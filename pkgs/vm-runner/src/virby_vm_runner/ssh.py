@@ -4,7 +4,11 @@ import asyncio
 import logging
 from pathlib import Path
 
-from .constants import SSH_KNOWN_HOSTS_FILE_NAME, SSH_USER_PRIVATE_KEY_FILE_NAME, VM_SSH_USER
+from .constants import (
+    SSH_KNOWN_HOSTS_FILE_NAME,
+    SSH_USER_PRIVATE_KEY_FILE_NAME,
+    VM_USER,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +17,7 @@ async def test_ssh_connectivity(
     ip_address: str,
     working_dir: Path,
     timeout: int = 30,
-    username: str = VM_SSH_USER,
+    username: str = VM_USER,
 ) -> bool:
     """
     Test SSH connectivity to a VM.
@@ -54,7 +58,7 @@ async def test_ssh_connectivity(
         "-i",
         str(ssh_key_path),
         f"{username}@{ip_address}",
-        "true",  # Simple command that exits with 0 on success
+        "true",
     ]
 
     try:
@@ -80,9 +84,7 @@ async def test_ssh_connectivity(
             return success
 
         except asyncio.TimeoutError:
-            logger.debug(
-                f" SSH connection to {ip_address} timed out after {timeout} seconds"
-            )
+            logger.debug(f" SSH connection to {ip_address} timed out after {timeout} seconds")
             process.kill()
             await process.wait()
             return False

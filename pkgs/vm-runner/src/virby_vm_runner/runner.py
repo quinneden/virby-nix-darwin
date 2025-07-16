@@ -43,8 +43,11 @@ class VirbyVMRunner:
         self._shutdown_requested = False
         self._vm_ip: str | None = None
         self._output_task: asyncio.Task | None = None
-        self._is_socket_activated = self._detect_socket_activation()
+        self._is_on_demand = self._detect_on_demand_lifecycle()
         self._activation_socket: socket.socket | None = None
+        self._active_connections = 0
+        self._last_connection_time = 0
+        self._debug_file_descriptors()
 
     def _generate_mac_address(self) -> str:
         """Generate a random MAC address for VM usage."""
@@ -52,13 +55,14 @@ class VirbyVMRunner:
         suffix = ":".join(f"{random.randint(0, 255):02x}" for _ in range(4))
         return f"{prefix}:{suffix}"
 
-    def _detect_socket_activation(self) -> bool:
-        """Detect if we're running under launchd socket activation."""
-        is_activated = os.environ.get("VIRBY_SOCKET_ACTIVATION") == "1"
-        if is_activated:
-            logger.debug("Socket activation detected via VIRBY_SOCKET_ACTIVATION=1")
-            self._debug_file_descriptors()
-        return is_activated
+    def _detect_on_demand_lifecycle(self) -> bool:
+        """Detect if VM should use on-demand lifecycle."""
+        is_on_demand = os.environ.get("VIRBY_ON_DEMAND") == "1"
+        if is_on_demand:
+            logger.debug("On-demand lifecycle detected via VIRBY_ON_DEMAND=1")
+        else:
+            logger.debug("Standard lifecycle detected via VIRBY_ON_DEMAND=0")
+        return is_on_demand
 
     def _call_launch_activate_socket(self, socket_name: str) -> list[int]:
         """Use launch_activate_socket to get socket file descriptors."""
@@ -145,9 +149,6 @@ class VirbyVMRunner:
 
     def _get_activation_socket(self) -> socket.socket:
         """Get the socket passed by launchd for activation."""
-        if not self._is_socket_activated:
-            raise VMStartupError("Not running under socket activation")
-
         logger.debug("Attempting to find activation socket...")
 
         # First try the proper launchd API
@@ -280,7 +281,10 @@ class VirbyVMRunner:
         )
 
         if not vm_running:
-            logger.info("Starting VM for socket activation")
+            if self._is_on_demand:
+                logger.info("Starting VM for on-demand connection")
+            else:
+                logger.info("Starting VM for always-on connection")
             await self._start_vm_process()
 
             # Start monitoring task
@@ -301,6 +305,11 @@ class VirbyVMRunner:
         self, client_reader: asyncio.StreamReader, client_writer: asyncio.StreamWriter
     ) -> None:
         """Proxy a client connection to the VM's SSH port."""
+        import time
+
+        self._active_connections += 1
+        self._last_connection_time = time.time()
+
         try:
             # Ensure VM is ready
             await self._ensure_vm_ready()
@@ -308,7 +317,9 @@ class VirbyVMRunner:
             # Connect to VM's SSH port
             vm_reader, vm_writer = await asyncio.open_connection(self._vm_ip, 22)
 
-            logger.debug(f"Proxying connection to VM at {self._vm_ip}:22")
+            logger.debug(
+                f"Proxying connection to VM at {self._vm_ip}:22 (active connections: {self._active_connections})"
+            )
 
             async def pipe_data(
                 src_reader: asyncio.StreamReader, dst_writer: asyncio.StreamWriter
@@ -340,11 +351,41 @@ class VirbyVMRunner:
         except Exception as e:
             logger.error(f"Connection proxy error: {e}")
         finally:
+            self._active_connections -= 1
+            logger.debug(f"Connection closed (active connections: {self._active_connections})")
+
             try:
                 client_writer.close()
                 await client_writer.wait_closed()
             except Exception:
                 pass
+
+            # In on-demand mode, schedule shutdown check after connection ends
+            if self._is_on_demand and self._active_connections == 0:
+                asyncio.create_task(self._schedule_shutdown_check())
+
+    async def _schedule_shutdown_check(self) -> None:
+        """Schedule a shutdown check after TTL expires in on-demand mode."""
+        import time
+
+        # Get TTL from config
+        ttl_seconds = self.config.ttl
+
+        logger.debug(f"Scheduling shutdown check in {ttl_seconds} seconds")
+        await asyncio.sleep(ttl_seconds)
+
+        # Check if we should shutdown
+        if self._active_connections == 0:
+            time_since_last_connection = time.time() - self._last_connection_time
+            if time_since_last_connection >= ttl_seconds:
+                logger.info("TTL expired with no active connections, shutting down VM")
+                await self.stop()
+            else:
+                logger.debug("TTL expired but recent connection activity, not shutting down")
+        else:
+            logger.debug(
+                f"TTL expired but {self._active_connections} active connections, not shutting down"
+            )
 
     def _build_vfkit_command(self) -> list[str]:
         """Build vfkit command from configuration."""
@@ -366,6 +407,7 @@ class VirbyVMRunner:
             f"virtio-fs,sharedDir={sshd_keys},mountTag=sshd-keys",
             "--device",
             f"virtio-net,nat,mac={self.mac_address}",
+            # FIXME: figure out port conflict after darwin-rebuild
             # "--restful-uri",
             # "tcp://localhost:31223",
             "--device",
@@ -429,7 +471,7 @@ class VirbyVMRunner:
 
         timeout = self.config.ip_discovery_timeout
         start_time = asyncio.get_event_loop().time()
-        interval = 1.0  # Start with 1 second
+        interval = 1.0
         max_interval = 5.0
 
         while (asyncio.get_event_loop().time() - start_time) < timeout:
@@ -485,7 +527,7 @@ class VirbyVMRunner:
             await self.vm_process.wait()
 
             # In on-demand mode, VM shutdown with exit code 0 is expected behavior
-            if self._is_socket_activated and self.vm_process.returncode == 0:
+            if self._is_on_demand and self.vm_process.returncode == 0:
                 logger.info("VM shut down normally in on-demand mode")
             elif not self._shutdown_requested:
                 logger.error(f"VM process died unexpectedly with code {self.vm_process.returncode}")
@@ -620,50 +662,32 @@ class VirbyVMRunner:
         signal.signal(signal.SIGTERM, signal_handler)
 
         try:
-            if self._is_socket_activated:
-                logger.info("Running in socket activation mode")
-                # Get the activation socket
-                self._activation_socket = self._get_activation_socket()
+            self._activation_socket = self._get_activation_socket()
 
-                # Start connection handling
-                proxy_task = asyncio.create_task(self._handle_activation_connections())
-
-                # Wait for shutdown signal
-                await asyncio.wait(
-                    [
-                        asyncio.create_task(shutdown_event.wait()),
-                        proxy_task,
-                    ],
-                    return_when=asyncio.FIRST_COMPLETED,
-                )
-
-                # Cancel proxy task if it's still running
-                if not proxy_task.done():
-                    proxy_task.cancel()
-                    try:
-                        await proxy_task
-                    except asyncio.CancelledError:
-                        pass
-            else:
-                logger.info("Running in standard mode")
+            # Start VM immediately if not on-demand
+            if not self._is_on_demand:
+                logger.info("Starting VM")
                 await self.start()
 
-                # Wait for shutdown signal or VM death
-                done, pending = await asyncio.wait(
-                    [
-                        asyncio.create_task(shutdown_event.wait()),
-                        asyncio.create_task(self._monitor_vm()),
-                    ],
-                    return_when=asyncio.FIRST_COMPLETED,
-                )
+            # Start connection handling
+            proxy_task = asyncio.create_task(self._handle_activation_connections())
 
-                # Cancel pending tasks
-                for task in pending:
-                    task.cancel()
-                    try:
-                        await task
-                    except asyncio.CancelledError:
-                        pass
+            # Wait for shutdown signal
+            await asyncio.wait(
+                [
+                    asyncio.create_task(shutdown_event.wait()),
+                    proxy_task,
+                ],
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+
+            # Cancel proxy task if it's still running
+            if not proxy_task.done():
+                proxy_task.cancel()
+                try:
+                    await proxy_task
+                except asyncio.CancelledError:
+                    pass
 
         except KeyboardInterrupt:
             logger.info("Received keyboard interrupt")

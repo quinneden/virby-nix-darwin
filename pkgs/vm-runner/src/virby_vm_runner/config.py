@@ -7,10 +7,8 @@ from pathlib import Path
 from typing import Any, Dict
 
 from .constants import (
-    DEFAULT_IP_DISCOVERY_TIMEOUT,
-    DEFAULT_SSH_READY_TIMEOUT,
-    DEFAULT_WORKING_DIRECTORY,
-    VM_SSH_USER,
+    WORKING_DIRECTORY,
+    VM_USER,
 )
 from .exceptions import VMConfigurationError
 
@@ -42,9 +40,7 @@ class VMConfig:
             logger.debug(f"Loaded configuration from {self.config_path}")
             return config
         except FileNotFoundError:
-            raise VMConfigurationError(
-                f"Configuration file not found: {self.config_path}"
-            )
+            raise VMConfigurationError(f"Configuration file not found: {self.config_path}")
         except json.JSONDecodeError as e:
             raise VMConfigurationError(f"Invalid JSON in configuration file: {e}")
         except Exception as e:
@@ -56,24 +52,18 @@ class VMConfig:
 
         for field in required_fields:
             if field not in self._config:
-                raise VMConfigurationError(
-                    f"Required configuration field missing: {field}"
-                )
+                raise VMConfigurationError(f"Required configuration field missing: {field}")
 
         # Validate and store cores
         cores = self._config["cores"]
         if not isinstance(cores, int) or cores < 1:
-            raise VMConfigurationError(
-                f"Invalid cores: {cores}. Expected: positive integer"
-            )
+            raise VMConfigurationError(f"Invalid cores: {cores}. Expected: positive integer")
         self._cores = cores
 
         # Validate and store memory
         memory = self._config["memory"]
         if not isinstance(memory, int) or memory < 1024:
-            raise VMConfigurationError(
-                f"Invalid memory: {memory}. Expected: at least 1024 MiB"
-            )
+            raise VMConfigurationError(f"Invalid memory: {memory}. Expected: at least 1024 MiB")
         self._memory = memory
 
         # Validate and store debug
@@ -93,9 +83,7 @@ class VMConfig:
         # Validate and store rosetta
         rosetta = self._config.get("rosetta", {})
         if not isinstance(rosetta, dict):
-            raise VMConfigurationError(
-                f"Invalid rosetta: {rosetta}. Expected: dictionary"
-            )
+            raise VMConfigurationError(f"Invalid rosetta: {rosetta}. Expected: dictionary")
         if "enable" in rosetta and not isinstance(rosetta["enable"], bool):
             raise VMConfigurationError(
                 f"Invalid rosetta.enable: {rosetta['enable']}. Expected: boolean"
@@ -103,12 +91,9 @@ class VMConfig:
         self._rosetta_enabled = rosetta.get("enable", False)
 
         # Store other config values
-        self._ip_discovery_timeout = self._config.get(
-            "ip_discovery_timeout", DEFAULT_IP_DISCOVERY_TIMEOUT
-        )
-        self._ssh_ready_timeout = self._config.get(
-            "ssh_ready_timeout", DEFAULT_SSH_READY_TIMEOUT
-        )
+        self._ip_discovery_timeout = self._config.get("ip_discovery_timeout", 60)
+        self._ssh_ready_timeout = self._config.get("ssh_ready_timeout", 60)
+        self._ttl = self._config.get("ttl", 10800)
 
     @property
     def cores(self) -> int:
@@ -138,13 +123,13 @@ class VMConfig:
     @property
     def working_directory(self) -> Path:
         """Get working directory."""
-        value = os.getenv("VIRBY_WORKING_DIRECTORY", DEFAULT_WORKING_DIRECTORY)
+        value = os.getenv("VIRBY_WORKING_DIRECTORY", WORKING_DIRECTORY)
         return Path(value)
 
     @property
-    def vm_ssh_user(self) -> str:
+    def VM_USER(self) -> str:
         """Get VM SSH user."""
-        return str(VM_SSH_USER)
+        return str(VM_USER)
 
     @property
     def ip_discovery_timeout(self) -> int:
@@ -156,6 +141,11 @@ class VMConfig:
         """Get SSH ready timeout in seconds."""
         return int(self._ssh_ready_timeout)
 
+    @property
+    def ttl(self) -> int:
+        """Get TTL (time to live) in seconds for on-demand VM shutdown."""
+        return int(self._ttl)
+
     def __repr__(self) -> str:
         """String representation of configuration."""
-        return f"VMConfig(cores={self.cores}, memory={self.memory}MiB, debug={self.debug_enabled}, port={self.port}, rosetta_enabled={self.rosetta_enabled}, working_directory={self.working_directory}, ip_discovery_timeout={self.ip_discovery_timeout}, ssh_ready_timeout={self.ssh_ready_timeout}, vm_ssh_user={self.vm_ssh_user})"
+        return f"VMConfig(cores={self.cores}, memory={self.memory}MiB, debug={self.debug_enabled}, port={self.port}, rosetta_enabled={self.rosetta_enabled}, working_directory={self.working_directory}, ip_discovery_timeout={self.ip_discovery_timeout}, ssh_ready_timeout={self.ssh_ready_timeout}, ttl={self.ttl}, VM_USER={self.VM_USER})"

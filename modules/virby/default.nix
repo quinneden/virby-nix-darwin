@@ -236,6 +236,7 @@ in
       vmConfigJson = pkgs.writeText "virby-vm-config.json" (
         builtins.toJSON {
           memory = memoryMib;
+          ttl = cfg.onDemand.ttl * 60; # Convert minutes to seconds
           inherit (cfg)
             debug
             cores
@@ -458,25 +459,20 @@ in
             path = [ "/bin" ];
             command = runnerScript;
 
-            serviceConfig =
-              {
-                UserName = darwinUser;
-                WorkingDirectory = workingDirectory;
-                KeepAlive = !cfg.onDemand.enable;
-                ProcessType = "Adaptive";
-                Sockets.Listener = lib.optionalAttrs cfg.onDemand.enable {
-                  SockFamily = "IPv4";
-                  SockNodeName = "localhost";
-                  SockServiceName = toString cfg.port;
-                };
+            serviceConfig = {
+              UserName = darwinUser;
+              WorkingDirectory = workingDirectory;
+              KeepAlive = !cfg.onDemand.enable;
+              ProcessType = "Adaptive";
+              Sockets.Listener = {
+                SockFamily = "IPv4";
+                SockNodeName = "localhost";
+                SockServiceName = toString cfg.port;
+              };
 
-                EnvironmentVariables = {
-                  VIRBY_VM_CONFIG_FILE = toString vmConfigJson;
-                } // lib.optionalAttrs cfg.onDemand.enable { VIRBY_SOCKET_ACTIVATION = "1"; };
-              }
-              // lib.optionalAttrs cfg.debug {
-                StandardErrorPath = "/tmp/${daemonName}.stderr.log";
-                StandardOutPath = "/tmp/${daemonName}.stdout.log";
+              EnvironmentVariables = {
+                VIRBY_VM_CONFIG_FILE = toString vmConfigJson;
+                VIRBY_ON_DEMAND = if cfg.onDemand.enable then "1" else "0";
               };
             } // lib.optionalAttrs cfg.debug { StandardOutPath = "/tmp/${daemonName}.log"; };
           };
