@@ -1,9 +1,11 @@
+# Library for shared constants and helper functions for Virby
 { lib }:
+
 let
   constants = import ./constants.nix;
-  defaults = import ./option-defaults.nix;
-  helpers = import ./helpers.nix { inherit constants lib; };
+  helpers = import ./helpers.nix { inherit lib; };
 in
+
 {
-  inherit defaults constants helpers;
+  inherit constants helpers;
 }

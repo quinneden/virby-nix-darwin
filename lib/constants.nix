@@ -1,4 +1,5 @@
-# Constants for the module
+# Constants for the Virby Nix-darwin module
+
 let
   baseDiskFileName = "base.img";
   dhcpdLeasesFilePath = "/var/db/dhcpd_leases";
@@ -15,6 +16,7 @@ let
   vmUser = "builder";
   workingDirectory = "/var/lib/virby";
 in
+
 {
   inherit
     baseDiskFileName
