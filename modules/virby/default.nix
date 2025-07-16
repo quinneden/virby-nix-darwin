@@ -7,12 +7,17 @@
 }:
 let
   inherit (_lib.constants)
+    baseDiskFileName
+    diffDiskFileName
+    sshdKeysSharedDirName
     sshHostPrivateKeyFileName
     sshHostPublicKeyFileName
+    sshKnownHostsFileName
     sshUserPrivateKeyFileName
     sshUserPublicKeyFileName
     vmHostName
     vmUser
+    workingDirectory
     ;
 
   inherit (_lib.helpers)
@@ -214,16 +219,14 @@ in
           ;
       };
 
-      baseDiskPath = "${workingDirectory}/base.img";
-      diffDiskPath = "${workingDirectory}/diff.img";
+      baseDiskPath = "${workingDirectory}/${baseDiskFileName}";
+      diffDiskPath = "${workingDirectory}/${diffDiskFileName}";
       sourceImagePath = "${imageWithFinalConfig}/${imageWithFinalConfig.passthru.filePath}";
 
       memoryMib = if lib.isString cfg.memory then parseMemoryString cfg.memory else cfg.memory;
-      sshdKeysSharedDirName = "vm_sshd_keys";
       sshHostKeyAlias = "${vmHostName}-key";
 
       daemonName = "virbyd";
-      workingDirectory = "/var/lib/virby";
 
       darwinGid = 348;
       darwinGroup = "virby";
@@ -282,7 +285,7 @@ in
           rm -f ${sshUserPrivateKeyFileName} ${sshHostPublicKeyFileName}
           rm -rf ${sshdKeysSharedDirName}
 
-          echo "${sshHostKeyAlias} $(cat $temp_host_key.pub)" > ssh_known_hosts
+          echo "${sshHostKeyAlias} $(cat $temp_host_key.pub)" > ${sshKnownHostsFileName}
 
           mkdir -p ${sshdKeysSharedDirName}
 
@@ -346,8 +349,8 @@ in
           fi
         fi
 
-        if ! chmod 'go+r' ssh_known_hosts; then
-          ${logError} "Failed to set permissions on ssh_known_hosts"
+        if ! chmod 'go+r' ${sshKnownHostsFileName}; then
+          ${logError} "Failed to set permissions on ${sshKnownHostsFileName}"
           exit 1
         fi
 
@@ -443,7 +446,7 @@ in
 
         environment.etc."ssh/ssh_config.d/100-${vmHostName}.conf".text = ''
           Host ${vmHostName}
-            GlobalKnownHostsFile ${workingDirectory}/ssh_known_hosts
+            GlobalKnownHostsFile ${workingDirectory}/${sshKnownHostsFileName}
             HostKeyAlias ${sshHostKeyAlias}
             Hostname localhost
             IdentityFile ${workingDirectory}/${sshUserPrivateKeyFileName}

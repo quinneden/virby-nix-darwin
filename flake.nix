@@ -27,7 +27,7 @@
 
       packages =
         perDarwinSystem (pkgs: {
-          vm-runner = pkgs.python3Packages.callPackage ./pkgs/vm-runner { };
+          vm-runner = pkgs.python3Packages.callPackage ./pkgs/vm-runner { inherit _lib; };
         })
         // perLinuxSystem (pkgs: {
           default = self.packages.${pkgs.system}.vm-image;
