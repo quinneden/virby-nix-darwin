@@ -7,8 +7,8 @@ let
   RED = "${ESC}[31m";
   RESET = "${ESC}[0m";
 
-  logInfo = "printf >&2 \"[$(date '+%Y-%m-%d %H:%M:%S')] ${GREEN}INFO:${RESET} %s\n\"";
-  logError = "printf >&2 \"[$(date '+%Y-%m-%d %H:%M:%S')] ${RED}ERROR:${RESET} %s\n\"";
+  logInfo = "printf \"[$(date '+%Y-%m-%d %H:%M:%S')] ${GREEN}INFO:${RESET} %s\n\"";
+  logError = "printf \"[$(date '+%Y-%m-%d %H:%M:%S')] ${RED}ERROR:${RESET} %s\n\"";
 
   setupLogFunctions = ''
     logInfo() {
