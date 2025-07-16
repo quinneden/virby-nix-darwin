@@ -114,12 +114,14 @@ in
           options = {
             enable = lib.mkOption {
               type = bool;
+              default = false;
               description = ''
                 Whether to enable on-demand activation of the VM.
               '';
             };
             ttl = lib.mkOption {
               type = int;
+              default = 180;
               description = ''
                 This specifies the number of minutes of inactivity which must pass before the VM
                 shuts down.
@@ -129,10 +131,7 @@ in
             };
           };
         });
-      default = {
-        enable = false;
-        ttl = 180;
-      };
+      default = { };
       description = ''
         By default, the VM is always-on, running as a daemon in the background. This allows builds
         to started right away, but also means the VM will always be consuming (a small amount of)
@@ -163,15 +162,14 @@ in
           options = {
             enable = lib.mkOption {
               type = bool;
+              default = false;
               description = ''
                 Whether to enable Rosetta.
               '';
             };
           };
         });
-      default = {
-        enable = false;
-      };
+      default = { };
       description = ''
         Whether to enable Rosetta support for the VM.
 
@@ -208,7 +206,7 @@ in
         ]
       );
 
-      linuxSystem = lib.replaceString "darwin" "linux" pkgs.system;
+      linuxSystem = lib.replaceStrings [ "darwin" ] [ "linux" ] pkgs.system;
 
       imageWithFinalConfig = self.packages.${linuxSystem}.vm-image.override {
         inherit (cfg)
@@ -480,6 +478,7 @@ in
                 StandardErrorPath = "/tmp/${daemonName}.stderr.log";
                 StandardOutPath = "/tmp/${daemonName}.stdout.log";
               };
+            } // lib.optionalAttrs cfg.debug { StandardOutPath = "/tmp/${daemonName}.log"; };
           };
         };
 
