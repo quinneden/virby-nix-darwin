@@ -12,7 +12,7 @@
       _lib = import ./lib { inherit lib; };
 
       darwinSystems = lib.systems.doubles.darwin;
-      linuxSystems = lib.forEach darwinSystems (f: lib.replaceString "darwin" "linux" f);
+      linuxSystems = lib.forEach darwinSystems (f: lib.replaceStrings [ "darwin" ] [ "linux" ] f);
 
       perSystem = systems: f: lib.genAttrs systems (system: f (import nixpkgs { inherit system; }));
 
@@ -27,6 +27,7 @@
 
       packages =
         perDarwinSystem (pkgs: {
+          default = self.packages.${pkgs.system}.vm-runner;
           vm-runner = pkgs.python3Packages.callPackage ./pkgs/vm-runner { inherit _lib; };
         })
         // perLinuxSystem (pkgs: {
