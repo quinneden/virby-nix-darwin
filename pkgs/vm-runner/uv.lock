@@ -160,7 +160,7 @@ wheels = [
 ]
 
 [[package]]
-name = "virby-vm"
+name = "virby-vm-runner"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

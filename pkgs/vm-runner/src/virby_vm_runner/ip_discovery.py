@@ -6,7 +6,7 @@ from pathlib import Path
 
 import aiofiles
 
-from .constants import DHCPD_LEASES_FILE
+from .constants import DHCPD_LEASES_FILE_PATH
 from .exceptions import IPDiscoveryError
 
 logger = logging.getLogger(__name__)
@@ -35,7 +35,7 @@ class DHCPEntry:
 class IPDiscovery:
     """Discovers VM IP address via DHCP lease file parsing."""
 
-    def __init__(self, mac_address: str, leases_file: str = DHCPD_LEASES_FILE):
+    def __init__(self, mac_address: str, leases_file: str = DHCPD_LEASES_FILE_PATH):
         """
         Initialize IP discovery.
 

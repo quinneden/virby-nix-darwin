@@ -7,12 +7,17 @@
 }:
 let
   inherit (_lib.constants)
+    baseDiskFileName
+    diffDiskFileName
+    sshdKeysSharedDirName
     sshHostPrivateKeyFileName
     sshHostPublicKeyFileName
+    sshKnownHostsFileName
     sshUserPrivateKeyFileName
     sshUserPublicKeyFileName
     vmHostName
     vmUser
+    workingDirectory
     ;
 
   inherit (_lib.helpers)
@@ -22,31 +27,14 @@ let
     setupLogFunctions
     ;
 
-  inherit (lib)
-    isString
-    makeBinPath
-    mkAfter
-    mkBefore
-    mkDefault
-    mkEnableOption
-    mkForce
-    mkIf
-    mkMerge
-    mkOption
-    optional
-    optionalAttrs
-    replaceString
-    types
-    ;
-
   cfg = config.services.virby;
 in
 {
   options.services.virby = {
-    enable = mkEnableOption "Virby, a vfkit-based linux builder for nix-darwin";
+    enable = lib.mkEnableOption "Virby, a vfkit-based linux builder for nix-darwin";
 
-    allowUserSsh = mkOption {
-      type = types.bool;
+    allowUserSsh = lib.mkOption {
+      type = lib.types.bool;
       default = false;
       description = ''
         Whether to allow non-root users to SSH into the VM.
@@ -56,8 +44,8 @@ in
       '';
     };
 
-    cores = mkOption {
-      type = types.int;
+    cores = lib.mkOption {
+      type = lib.types.int;
       default = 8;
       description = ''
         The number of CPU cores allocated to the VM.
@@ -66,8 +54,8 @@ in
       '';
     };
 
-    debug = mkOption {
-      type = types.bool;
+    debug = lib.mkOption {
+      type = lib.types.bool;
       default = false;
       description = ''
         Whether to enable debug logging for the VM.
@@ -78,8 +66,8 @@ in
       '';
     };
 
-    diskSize = mkOption {
-      type = types.str;
+    diskSize = lib.mkOption {
+      type = lib.types.str;
       default = "100GiB";
       description = ''
         The size of the disk image for the VM.
@@ -88,8 +76,8 @@ in
       '';
     };
 
-    extraConfig = mkOption {
-      type = types.deferredModule;
+    extraConfig = lib.mkOption {
+      type = lib.types.deferredModule;
       default = { };
       description = ''
         Additional NixOS modules to include in the VM's system configuration.
@@ -108,8 +96,8 @@ in
       '';
     };
 
-    memory = mkOption {
-      type = with types; either int str;
+    memory = lib.mkOption {
+      type = with lib.types; either int str;
       default = 6144;
       description = ''
         The amount of memory to allocate to the VM in MiB.
@@ -119,19 +107,21 @@ in
       '';
     };
 
-    onDemand = mkOption {
+    onDemand = lib.mkOption {
       type =
-        with types;
+        with lib.types;
         (submodule {
           options = {
-            enable = mkOption {
+            enable = lib.mkOption {
               type = bool;
+              default = false;
               description = ''
                 Whether to enable on-demand activation of the VM.
               '';
             };
-            ttl = mkOption {
+            ttl = lib.mkOption {
               type = int;
+              default = 180;
               description = ''
                 This specifies the number of minutes of inactivity which must pass before the VM
                 shuts down.
@@ -141,10 +131,7 @@ in
             };
           };
         });
-      default = {
-        enable = false;
-        ttl = 180;
-      };
+      default = { };
       description = ''
         By default, the VM is always-on, running as a daemon in the background. This allows builds
         to started right away, but also means the VM will always be consuming (a small amount of)
@@ -160,30 +147,29 @@ in
       '';
     };
 
-    port = mkOption {
-      type = types.port;
+    port = lib.mkOption {
+      type = lib.types.port;
       default = 31222;
       description = ''
         The SSH port used by the VM.
       '';
     };
 
-    rosetta = mkOption {
+    rosetta = lib.mkOption {
       type =
-        with types;
+        with lib.types;
         (submodule {
           options = {
-            enable = mkOption {
+            enable = lib.mkOption {
               type = bool;
+              default = false;
               description = ''
                 Whether to enable Rosetta.
               '';
             };
           };
         });
-      default = {
-        enable = false;
-      };
+      default = { };
       description = ''
         Whether to enable Rosetta support for the VM.
 
@@ -194,8 +180,8 @@ in
       '';
     };
 
-    speedFactor = mkOption {
-      type = types.int;
+    speedFactor = lib.mkOption {
+      type = lib.types.int;
       default = 1;
       description = ''
         The speed factor to set for the VM in `nix.buildMachines`.
@@ -208,7 +194,7 @@ in
 
   config =
     let
-      binPath = makeBinPath (
+      binPath = lib.makeBinPath (
         with pkgs;
         [
           coreutils
@@ -216,11 +202,11 @@ in
           gnugrep
           nix
           openssh
-          self.packages.${pkgs.hostPlatform.system}.vm-runner
+          self.packages.${system}.vm-runner
         ]
       );
 
-      linuxSystem = replaceString "darwin" "linux" pkgs.hostPlatform.system;
+      linuxSystem = lib.replaceStrings [ "darwin" ] [ "linux" ] pkgs.system;
 
       imageWithFinalConfig = self.packages.${linuxSystem}.vm-image.override {
         inherit (cfg)
@@ -231,17 +217,14 @@ in
           ;
       };
 
-      baseDiskPath = "${workingDirectory}/base.img";
-      diffDiskPath = "${workingDirectory}/diff.img";
-      imageFileName = replaceString ".raw" ".img" imageWithFinalConfig.passthru.filePath;
-      sourceImagePath = "${imageWithFinalConfig}/${imageFileName}";
+      baseDiskPath = "${workingDirectory}/${baseDiskFileName}";
+      diffDiskPath = "${workingDirectory}/${diffDiskFileName}";
+      sourceImagePath = "${imageWithFinalConfig}/${imageWithFinalConfig.passthru.filePath}";
 
-      memoryMib = if isString cfg.memory then parseMemoryString cfg.memory else cfg.memory;
-      sshdKeysSharedDirName = "vm_sshd_keys";
+      memoryMib = if lib.isString cfg.memory then parseMemoryString cfg.memory else cfg.memory;
       sshHostKeyAlias = "${vmHostName}-key";
 
       daemonName = "virbyd";
-      workingDirectory = "/var/lib/virby";
 
       darwinGid = 348;
       darwinGroup = "virby";
@@ -253,6 +236,7 @@ in
       vmConfigJson = pkgs.writeText "virby-vm-config.json" (
         builtins.toJSON {
           memory = memoryMib;
+          ttl = cfg.onDemand.ttl * 60; # Convert minutes to seconds
           inherit (cfg)
             debug
             cores
@@ -300,7 +284,7 @@ in
           rm -f ${sshUserPrivateKeyFileName} ${sshHostPublicKeyFileName}
           rm -rf ${sshdKeysSharedDirName}
 
-          echo "${sshHostKeyAlias} $(cat $temp_host_key.pub)" > ssh_known_hosts
+          echo "${sshHostKeyAlias} $(cat $temp_host_key.pub)" > ${sshKnownHostsFileName}
 
           mkdir -p ${sshdKeysSharedDirName}
 
@@ -315,10 +299,10 @@ in
         umask 'g-w,o='
         chmod 'g-w,o=x' .
 
-        sourceImageHash=$(nix hash file ${sourceImagePath} 2>/dev/null)
-        baseDiskHash=$(nix hash file ${baseDiskPath} 2>/dev/null) || true
+        source_image_path_marker="${workingDirectory}/.disk-image-store-path"
+        current_source_image_path=$(cat $source_image_path_marker 2>/dev/null) || true
 
-        if [[ $sourceImageHash != $baseDiskHash || ! -f ${diffDiskPath} ]]; then
+        if [[ ! -f ${diffDiskPath} ]] || [[ $current_source_image_path != ${imageWithFinalConfig} ]]; then
           ${logInfo} "Creating base/diff disk images..."
 
           rm -f ${baseDiskPath} ${diffDiskPath}
@@ -340,6 +324,8 @@ in
             exit 1
           fi
           ${logInfo} "Resized diff disk to ${cfg.diskSize}"
+
+          echo ${imageWithFinalConfig} > $source_image_path_marker
         fi
 
         if should_keygen; then
@@ -362,8 +348,8 @@ in
           fi
         fi
 
-        if ! chmod 'go+r' ssh_known_hosts; then
-          ${logError} "Failed to set permissions on ssh_known_hosts"
+        if ! chmod 'go+r' ${sshKnownHostsFileName}; then
+          ${logError} "Failed to set permissions on ${sshKnownHostsFileName}"
           exit 1
         fi
 
@@ -375,9 +361,9 @@ in
         fi
       '';
     in
-    mkMerge [
-      (mkIf (!cfg.enable) {
-        system.activationScripts.postActivation.text = mkBefore ''
+    lib.mkMerge [
+      (lib.mkIf (!cfg.enable) {
+        system.activationScripts.postActivation.text = lib.mkBefore ''
           ${setupLogFunctions}
 
           if [[ -d ${workingDirectory} ]]; then
@@ -411,7 +397,7 @@ in
         '';
       })
 
-      (mkIf cfg.enable {
+      (lib.mkIf cfg.enable {
         assertions = [
           {
             assertion = !(pkgs.system != "aarch64-darwin" && cfg.rosetta.enable);
@@ -419,7 +405,7 @@ in
           }
         ];
 
-        system.activationScripts.extraActivation.text = mkAfter ''
+        system.activationScripts.extraActivation.text = lib.mkAfter ''
           ${setupLogFunctions}
 
           # Create group
@@ -459,7 +445,7 @@ in
 
         environment.etc."ssh/ssh_config.d/100-${vmHostName}.conf".text = ''
           Host ${vmHostName}
-            GlobalKnownHostsFile ${workingDirectory}/ssh_known_hosts
+            GlobalKnownHostsFile ${workingDirectory}/${sshKnownHostsFileName}
             HostKeyAlias ${sshHostKeyAlias}
             Hostname localhost
             IdentityFile ${workingDirectory}/${sshUserPrivateKeyFileName}
@@ -473,26 +459,22 @@ in
             path = [ "/bin" ];
             command = runnerScript;
 
-            serviceConfig =
-              {
-                UserName = darwinUser;
-                WorkingDirectory = workingDirectory;
-                KeepAlive = !cfg.onDemand.enable;
-                ProcessType = "Adaptive";
-                Sockets.Listener = optionalAttrs cfg.onDemand.enable {
-                  SockFamily = "IPv4";
-                  SockNodeName = "localhost";
-                  SockServiceName = toString cfg.port;
-                };
-
-                EnvironmentVariables = {
-                  VIRBY_VM_CONFIG_FILE = toString vmConfigJson;
-                } // optionalAttrs cfg.onDemand.enable { VIRBY_SOCKET_ACTIVATION = "1"; };
-              }
-              // optionalAttrs cfg.debug {
-                StandardErrorPath = "/tmp/${daemonName}.stderr.log";
-                StandardOutPath = "/tmp/${daemonName}.stdout.log";
+            serviceConfig = {
+              UserName = darwinUser;
+              WorkingDirectory = workingDirectory;
+              KeepAlive = !cfg.onDemand.enable;
+              ProcessType = "Adaptive";
+              Sockets.Listener = {
+                SockFamily = "IPv4";
+                SockNodeName = "localhost";
+                SockServiceName = toString cfg.port;
               };
+
+              EnvironmentVariables = {
+                VIRBY_VM_CONFIG_FILE = toString vmConfigJson;
+                VIRBY_ON_DEMAND = if cfg.onDemand.enable then "1" else "0";
+              };
+            } // lib.optionalAttrs cfg.debug { StandardOutPath = "/tmp/${daemonName}.log"; };
           };
         };
 
@@ -509,12 +491,12 @@ in
                 "nixos-test"
               ];
               speedFactor = cfg.speedFactor;
-              systems = [ linuxSystem ] ++ optional cfg.rosetta.enable "x86_64-linux";
+              systems = [ linuxSystem ] ++ lib.optional cfg.rosetta.enable "x86_64-linux";
             }
           ];
 
-          distributedBuilds = mkForce true;
-          settings.builders-use-substitutes = mkDefault true;
+          distributedBuilds = lib.mkForce true;
+          settings.builders-use-substitutes = lib.mkDefault true;
         };
       })
     ];

@@ -4,10 +4,15 @@
   lib,
   pkgs,
 
-  debug ? _lib.defaults.debug,
-  extraConfig ? _lib.defaults.extraConfig,
-  onDemand ? _lib.defaults.onDemand,
-  rosetta ? _lib.defaults.rosetta,
+  debug ? false,
+  extraConfig ? { },
+  onDemand ? {
+    enable = false;
+    ttl = 180;
+  },
+  rosetta ? {
+    enable = false;
+  },
 }:
 let
   cfg = { inherit debug onDemand rosetta; };

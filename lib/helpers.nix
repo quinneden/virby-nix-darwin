@@ -1,15 +1,14 @@
-# Helper functions for the module
-{ constants, lib }:
-let
-  inherit (constants) vmHostName;
+# Helper functions for the Virby Nix-darwin module
+{ lib }:
 
+let
   ESC = builtins.fromJSON ''"\u001b"'';
   GREEN = "${ESC}[32m";
   RED = "${ESC}[31m";
   RESET = "${ESC}[0m";
 
-  logInfo = "printf >&1 \"[$(date '+%Y-%m-%d %H:%M:%S')] ${GREEN}INFO:${RESET} %s\n\"";
-  logError = "printf >&2 \"[$(date '+%Y-%m-%d %H:%M:%S')] ${RED}ERROR:${RESET} %s\n\"";
+  logInfo = "printf \"[$(date '+%Y-%m-%d %H:%M:%S')] ${GREEN}INFO:${RESET} %s\n\"";
+  logError = "printf \"[$(date '+%Y-%m-%d %H:%M:%S')] ${RED}ERROR:${RESET} %s\n\"";
 
   setupLogFunctions = ''
     logInfo() {
@@ -43,10 +42,11 @@ let
           throw "unsupported memory format: ${suffix}";
     in
     if mib < 1024 then
-      throw "${vmHostName} requires at least 1024 MiB of memory, got: ${toString mib} MiB"
+      throw "The Virby VM requires at least 1024 MiB of memory, got: ${toString mib} MiB"
     else
       mib;
 in
+
 {
   inherit
     logError

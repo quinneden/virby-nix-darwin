@@ -22,11 +22,12 @@ def setup_logging(debug: bool = False) -> None:
 
 def debug_startup_environment():
     """Debug environment and file descriptors at startup."""
-    print("=== STARTUP DEBUG ===", file=sys.stderr)
+    logger = logging.getLogger(__name__)
+    logger.debug("=== STARTUP DEBUG ===")
 
     # Log key environment variables
     env_vars = [
-        "VIRBY_SOCKET_ACTIVATION",
+        "VIRBY_ON_DEMAND",
         "VIRBY_VM_CONFIG_FILE",
         "VIRBY_WORKING_DIRECTORY",
         "LISTEN_FDS",
@@ -34,36 +35,34 @@ def debug_startup_environment():
         "LAUNCH_DAEMON_SOCKET_NAME",
     ]
     for var in env_vars:
-        value = os.environ.get(var, "NOT_SET")
-        print(f"ENV {var}={value}", file=sys.stderr)
+        value = os.environ.get(var, "null")
+        logger.debug(f"ENV {var}={value}")
 
     # Debug file descriptors
-    print("File descriptors:", file=sys.stderr)
+    logger.debug("File descriptors:")
     for fd in range(10):
         try:
             fd_stat = os.fstat(fd)
             if stat.S_ISSOCK(fd_stat.st_mode):
-                print(f"FD {fd}: SOCKET", file=sys.stderr)
+                logger.debug(f"FD {fd}: SOCKET")
             elif stat.S_ISREG(fd_stat.st_mode):
-                print(f"FD {fd}: FILE", file=sys.stderr)
+                logger.debug(f"FD {fd}: FILE")
             elif stat.S_ISFIFO(fd_stat.st_mode):
-                print(f"FD {fd}: PIPE", file=sys.stderr)
+                logger.debug(f"FD {fd}: PIPE")
             elif stat.S_ISCHR(fd_stat.st_mode):
-                print(f"FD {fd}: CHAR_DEV", file=sys.stderr)
+                logger.debug(f"FD {fd}: CHAR_DEV")
             else:
-                print(f"FD {fd}: OTHER", file=sys.stderr)
+                logger.debug(f"FD {fd}: OTHER")
         except OSError as e:
             if e.errno != 9:  # Not "Bad file descriptor"
-                print(f"FD {fd}: ERROR {e}", file=sys.stderr)
-    print("=== END STARTUP DEBUG ===", file=sys.stderr)
+                logger.debug(f"FD {fd}: ERROR {e}")
+    logger.debug("=== END STARTUP DEBUG ===")
 
 
 async def main() -> int:
     """Main CLI entry point."""
     try:
-        # Debug startup environment if socket activation is detected
-        if os.getenv("VIRBY_SOCKET_ACTIVATION") == "1":
-            debug_startup_environment()
+        debug_startup_environment()
 
         config_file_env = os.getenv("VIRBY_VM_CONFIG_FILE")
         config = VMConfig(config_path=config_file_env)

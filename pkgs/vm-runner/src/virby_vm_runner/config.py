@@ -7,10 +7,8 @@ from pathlib import Path
 from typing import Any, Dict
 
 from .constants import (
-    DEFAULT_IP_DISCOVERY_TIMEOUT,
-    DEFAULT_SSH_READY_TIMEOUT,
-    DEFAULT_WORKING_DIRECTORY,
-    VM_SSH_USER,
+    WORKING_DIRECTORY,
+    VM_USER,
 )
 from .exceptions import VMConfigurationError
 
@@ -93,10 +91,9 @@ class VMConfig:
         self._rosetta_enabled = rosetta.get("enable", False)
 
         # Store other config values
-        self._ip_discovery_timeout = self._config.get(
-            "ip_discovery_timeout", DEFAULT_IP_DISCOVERY_TIMEOUT
-        )
-        self._ssh_ready_timeout = self._config.get("ssh_ready_timeout", DEFAULT_SSH_READY_TIMEOUT)
+        self._ip_discovery_timeout = self._config.get("ip_discovery_timeout", 60)
+        self._ssh_ready_timeout = self._config.get("ssh_ready_timeout", 60)
+        self._ttl = self._config.get("ttl", 10800)
 
     @property
     def cores(self) -> int:
@@ -126,13 +123,13 @@ class VMConfig:
     @property
     def working_directory(self) -> Path:
         """Get working directory."""
-        value = os.getenv("VIRBY_WORKING_DIRECTORY", DEFAULT_WORKING_DIRECTORY)
+        value = os.getenv("VIRBY_WORKING_DIRECTORY", WORKING_DIRECTORY)
         return Path(value)
 
     @property
-    def vm_ssh_user(self) -> str:
+    def VM_USER(self) -> str:
         """Get VM SSH user."""
-        return str(VM_SSH_USER)
+        return str(VM_USER)
 
     @property
     def ip_discovery_timeout(self) -> int:
@@ -144,6 +141,11 @@ class VMConfig:
         """Get SSH ready timeout in seconds."""
         return int(self._ssh_ready_timeout)
 
+    @property
+    def ttl(self) -> int:
+        """Get TTL (time to live) in seconds for on-demand VM shutdown."""
+        return int(self._ttl)
+
     def __repr__(self) -> str:
         """String representation of configuration."""
-        return f"VMConfig(cores={self.cores}, memory={self.memory}MiB, debug={self.debug_enabled}, port={self.port}, rosetta_enabled={self.rosetta_enabled}, working_directory={self.working_directory}, ip_discovery_timeout={self.ip_discovery_timeout}, ssh_ready_timeout={self.ssh_ready_timeout}, vm_ssh_user={self.vm_ssh_user})"
+        return f"VMConfig(cores={self.cores}, memory={self.memory}MiB, debug={self.debug_enabled}, port={self.port}, rosetta_enabled={self.rosetta_enabled}, working_directory={self.working_directory}, ip_discovery_timeout={self.ip_discovery_timeout}, ssh_ready_timeout={self.ssh_ready_timeout}, ttl={self.ttl}, VM_USER={self.VM_USER})"

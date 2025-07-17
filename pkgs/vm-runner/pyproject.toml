@@ -47,6 +47,10 @@ warn_return_any = true
 warn_unused_configs = true
 warn_unused_ignores = true
 
+[tool.ruff]
+fix = true
+line-length = 100
+
 [tool.uv]
 package = true
 default-groups = ["dev"]
