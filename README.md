@@ -7,7 +7,6 @@ Virby is a module for [nix-darwin](https://github.com/nix-darwin/nix-darwin) tha
 Add virby to your flake inputs:
 
 ```nix
-# flake.nix
 {
   inputs.virby = {
     url = "github:quinneden/virby-nix-darwin";
@@ -16,6 +15,7 @@ Add virby to your flake inputs:
 
   outputs = { virby, ... }: {
     darwinConfigurations."myHost" = {
+      # Import the module
       modules = [ virby.darwinModules.default ];
     };
   };
@@ -25,14 +25,8 @@ Add virby to your flake inputs:
 > [!Important]
 > When enabling Virby for the first time, you must add the binary cache to your Nix configuration. This ensures that the prebuilt VM image is available for download, rather than having to be built locally, which requires an existing `aarch64-linux` builder. You can do this in one of two ways:
 
-Run the `darwin-rebuild` command with the following options:
-```bash
-  sudo darwin-rebuild switch --flake .#myHost \
-    --option "extra-substituters" "https://virby-nix-darwin.cachix.org" \
-    --option "extra-trusted-public-keys" "virby-nix-darwin.cachix.org-1:z9GiEZeBU5bEeoDQjyfHPMGPBaIQJOOvYOOjGMKIlLo="
-```
+Add the binary cache to your configuration **before** enabling Virby:
 
-Or, add the binary cache to your configuration **before** enabling Virby:
 ```nix
   nix.settings = {
     extra-substituters = [ "https://virby-nix-darwin.cachix.org" ];
@@ -40,23 +34,35 @@ Or, add the binary cache to your configuration **before** enabling Virby:
       "virby-nix-darwin.cachix.org-1:z9GiEZeBU5bEeoDQjyfHPMGPBaIQJOOvYOOjGMKIlLo="
     ];
   };
+
+  services.virby.enable = false;
 ```
 
-Then, run `darwin-rebuild`, then enable Virby:
+Then run `darwin-rebuild`, then enable Virby:
 
 ```nix
-# configuration.nix
 services.virby = {
   enable = true;
-  # Don't define any other options until after you've switched to the new configuration
-  # with virby enabled. If the configuration of the VM changes, the VM disk image hash won't
-  # match the one in the cache, and it will want to build it locally instead.
+  # Don't define any other options until after you've switched to the new configuration.
+  # If the derivation changes from the one in the binary cache, the hash won't match and
+  # it will try to build the image locally instead.
 };
 ```
 
 Then rebuild again.
 
+OR
+
+Run the `darwin-rebuild` command with the following options:
+
+```bash
+  sudo darwin-rebuild switch --flake .#myHost \
+    --option "extra-substituters" "https://virby-nix-darwin.cachix.org" \
+    --option "extra-trusted-public-keys" "virby-nix-darwin.cachix.org-1:z9GiEZeBU5bEeoDQjyfHPMGPBaIQJOOvYOOjGMKIlLo="
+```
+
 As an alternative to using the binary cache, you could enable the `nix.linux-builder` option before enabling virby, then disable after switching:
+
 ```nix
   nix.linux-builder.enable = true;
 ```
@@ -72,18 +78,19 @@ As an alternative to using the binary cache, you could enable the `nix.linux-bui
 
 ### Basic Settings
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `enable` | bool | `false` | Enable the service |
-| `cores` | int | `8` | CPU cores allocated to VM |
-| `memory` | int/string | `6144` | Memory in MiB or string format (e.g. "6GiB") |
-| `diskSize` | string | `"100GiB"` | VM disk size |
-| `port` | int | `31222` | SSH port for VM access |
-| `speedFactor` | int | `1` | Speed factor for Nix build machine |
+| Option        | Type       | Default    | Description                                  |
+|---------------|------------|------------|----------------------------------------------|
+| `enable`      | bool       | `false`    | Enable the service                           |
+| `cores`       | int        | `8`        | CPU cores allocated to VM                    |
+| `memory`      | int/string | `6144`     | Memory in MiB or string format (e.g. "6GiB") |
+| `diskSize`    | string     | `"100GiB"` | VM disk size                                 |
+| `port`        | int        | `31222`    | SSH port for VM access                       |
+| `speedFactor` | int        | `1`        | Speed factor for Nix build machine           |
 
 ### Advanced Settings
 
-**On-Demand Activation**
+**On-demand Activation**
+
 ```nix
 services.virby.onDemand = {
   enable = true;
@@ -92,11 +99,13 @@ services.virby.onDemand = {
 ```
 
 **Rosetta Support** (Apple Silicon only)
+
 ```nix
 services.virby.rosetta.enable = true;
 ```
 
 **Custom NixOS Configuration**
+
 ```nix
 services.virby.extraConfig = {
   inherit (config.nix) settings;
@@ -105,6 +114,7 @@ services.virby.extraConfig = {
 ```
 
 **Debug Options** (insecure, for troubleshooting only)
+
 ```nix
 services.virby = {
   debug = true;         # Enable verbose logging
@@ -129,7 +139,7 @@ Virby integrates three components:
 
 ## Troubleshooting
 
-**Debug logging:**
+**Debug logging**
 ```nix
 services.virby.debug = true;
 ```
@@ -139,7 +149,8 @@ services.virby.debug = true;
 tail -f /tmp/virbyd.stdout.log
 ```
 
-**SSH into VM:**
+**SSH into VM**
+
 ```bash
 # Requires allowUserSsh = true
 ssh virby-vm
