@@ -28,49 +28,58 @@ Add virby to your flake inputs:
 Add the binary cache to your configuration **before** enabling Virby:
 
 ```nix
+{
   nix.settings = {
     extra-substituters = [ "https://virby-nix-darwin.cachix.org" ];
     extra-trusted-public-keys = [
       "virby-nix-darwin.cachix.org-1:z9GiEZeBU5bEeoDQjyfHPMGPBaIQJOOvYOOjGMKIlLo="
     ];
   };
-
+  
   services.virby.enable = false;
+}
 ```
 
 Then run `darwin-rebuild`, then enable Virby:
 
 ```nix
-services.virby = {
-  enable = true;
+{
+  nix.settings = {
+    extra-substituters = [ "https://virby-nix-darwin.cachix.org" ];
+    extra-trusted-public-keys = [
+      "virby-nix-darwin.cachix.org-1:z9GiEZeBU5bEeoDQjyfHPMGPBaIQJOOvYOOjGMKIlLo="
+    ];
+  };
+  
   # Don't define any other options until after you've switched to the new configuration.
-  # If the derivation changes from the one in the binary cache, the hash won't match and
-  # it will try to build the image locally instead.
-};
+  # If the hash for the disk image derivation doesn't match the one in the binary cache, then
+  # nix will try to build the image locally.
+  services.virby.enable = true;
+}
 ```
 
-Then rebuild again.
+Finally, rebuild again.
 
-OR
+**OR**
 
 Run the `darwin-rebuild` command with the following options:
 
 ```bash
-  sudo darwin-rebuild switch --flake .#myHost \
-    --option "extra-substituters" "https://virby-nix-darwin.cachix.org" \
-    --option "extra-trusted-public-keys" "virby-nix-darwin.cachix.org-1:z9GiEZeBU5bEeoDQjyfHPMGPBaIQJOOvYOOjGMKIlLo="
+sudo darwin-rebuild switch --flake .#myHost \
+  --option "extra-substituters" "https://virby-nix-darwin.cachix.org" \
+  --option "extra-trusted-public-keys" "virby-nix-darwin.cachix.org-1:z9GiEZeBU5bEeoDQjyfHPMGPBaIQJOOvYOOjGMKIlLo="
 ```
 
-As an alternative to using the binary cache, you could enable the `nix.linux-builder` option before enabling virby, then disable after switching:
+If you prefer building the image locally, you can enable the `nix.linux-builder` option before enabling Virby:
 
 ```nix
-  nix.linux-builder.enable = true;
+nix.linux-builder.enable = true;
 ```
 
 ## Key Features
 
-- **On-demand activation** - VM starts only when builds are needed, shuts down after inactivity
-- **Rosetta support** - Build x86_64-linux packages on Apple Silicon using Rosetta translation
+- **On-demand activation** (optional) - VM is started when needed, then shuts down after a period of inactivity
+- **Rosetta support** (optional) - Build `x86_64-linux` packages on Apple Silicon using Rosetta translation
 - **Secure by default** - Host-only access via loopback (i.e. `127.0.0.1`), with automatic ED25519 key generation
 - **Fully configurable** - Adjust VM resources and add custom NixOS modules
 
@@ -133,9 +142,12 @@ Virby integrates three components:
 - **VM Image** - Minimal NixOS disk image configured for secure ssh access and build isolation
 - **VM Runner** - Python package managing VM lifecycle and SSH proxying
 
-**Build workflow:** Linux build requested → VM started (if needed) → Build executed in isolated environment → Results returned → VM shutdown (after idle timeout)
+**Build workflow:** Linux build requested → VM started (if needed) → Build on VM → Results copied to host → VM shutdown (after idle timeout)
 
-**Security model:** VM accessible only via localhost with key-based SSH authentication, minimal privileges, and filesystem isolation.
+**Security model:**
+- VM doesn't accept remote connections as it binds to the loopback interface
+- SSH keys are generated and copied to the VM on first run.
+- `builder` user has minimal permissions, root access is restricted by default
 
 ## Troubleshooting
 
@@ -146,7 +158,7 @@ services.virby.debug = true;
 
 ```bash
 # View daemon logs
-tail -f /tmp/virbyd.stdout.log
+tail -f /tmp/virbyd.log
 ```
 
 **SSH into VM**
@@ -160,8 +172,8 @@ ssh virby-vm
 ## Acknowledgments
 
 - Inspired by [nix-rosetta-builder](https://github.com/cpick/nix-rosetta-builder)
-- Powered by [vfkit](https://github.com/crc-org/vfkit) for native macOS virtualization
+- Uses [vfkit](https://github.com/crc-org/vfkit)
 
 ---
 
-**License**: MIT - see LICENSE file for details.
+**License**: MIT - see [LICENSE](LICENSE) file for details.
