@@ -35,6 +35,13 @@
           vm-image = pkgs.callPackage ./pkgs/vm-image { inherit _lib inputs lib; };
         });
 
+      devShells = perDarwinSystem (pkgs: {
+        default = pkgs.mkShellNoCC {
+          name = "virby-dev";
+          packages = [ pkgs.vfkit ];
+        };
+      });
+
       formatter = perDarwinSystem (pkgs: pkgs.nixfmt-rfc-style);
     };
 }
