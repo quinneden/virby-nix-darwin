@@ -400,7 +400,7 @@ in
       (lib.mkIf cfg.enable {
         assertions = [
           {
-            assertion = !(pkgs.system != "aarch64-darwin" && cfg.rosetta.enable);
+            assertion = !(pkgs.system != "aarch64-darwin" && cfg.rosetta);
             message = "Rosetta is only supported on aarch64-darwin systems.";
           }
         ];
@@ -491,7 +491,7 @@ in
                 "nixos-test"
               ];
               speedFactor = cfg.speedFactor;
-              systems = [ linuxSystem ] ++ lib.optional cfg.rosetta.enable "x86_64-linux";
+              systems = [ linuxSystem ] ++ lib.optional cfg.rosetta "x86_64-linux";
             }
           ];
 

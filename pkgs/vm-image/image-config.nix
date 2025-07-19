@@ -166,5 +166,7 @@ in
     };
   };
 
-  virtualisation = { inherit (cfg) rosetta; };
+  virtualisation = {
+    rosetta = cfg.rosetta;
+  };
 }

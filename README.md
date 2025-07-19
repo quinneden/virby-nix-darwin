@@ -110,7 +110,7 @@ services.virby.onDemand = {
 **Rosetta Support** (Apple Silicon only)
 
 ```nix
-services.virby.rosetta.enable = true;
+services.virby.rosetta = true;
 ```
 
 **Custom NixOS Configuration**

@@ -10,9 +10,7 @@
     enable = false;
     ttl = 180;
   },
-  rosetta ? {
-    enable = false;
-  },
+  rosetta ? false,
 }:
 let
   cfg = { inherit debug onDemand rosetta; };
