@@ -12,12 +12,12 @@
       _lib = import ./lib { inherit lib; };
 
       darwinSystems = lib.systems.doubles.darwin;
-      linuxSystems = lib.forEach darwinSystems (f: lib.replaceStrings [ "darwin" ] [ "linux" ] f);
+      linuxSystems = map (f: lib.replaceStrings [ "darwin" ] [ "linux" ] f) darwinSystems;
 
-      perSystem = systems: f: lib.genAttrs systems (system: f (import nixpkgs { inherit system; }));
+      pkgsFor = systems: f: lib.genAttrs systems (system: f (import nixpkgs { inherit system; }));
 
-      perDarwinSystem = perSystem darwinSystems;
-      perLinuxSystem = perSystem linuxSystems;
+      perDarwinSystem = pkgsFor darwinSystems;
+      perLinuxSystem = pkgsFor linuxSystems;
     in
     {
       darwinModules = {
