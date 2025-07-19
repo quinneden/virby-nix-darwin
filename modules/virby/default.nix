@@ -156,20 +156,8 @@ in
     };
 
     rosetta = lib.mkOption {
-      type =
-        with lib.types;
-        (submodule {
-          options = {
-            enable = lib.mkOption {
-              type = bool;
-              default = false;
-              description = ''
-                Whether to enable Rosetta.
-              '';
-            };
-          };
-        });
-      default = { };
+      type = lib.types.bool;
+      default = false;
       description = ''
         Whether to enable Rosetta support for the VM.
 
