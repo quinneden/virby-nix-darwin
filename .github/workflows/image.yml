@@ -1,16 +1,25 @@
-# Build and cache the VM disk image
+# Build and cache the VM disk images for both architectures
 
-name: Build vm-image
+name: Build and Cache VM Images
 
 on:
   push:
     branches: [main]
-    paths: [pkgs/vm-image/*]
+    paths:
+      [
+        "!flake.nix",
+        "!lib/**",
+        "!modules/**",
+        "!pkgs/vm-runner/**",
+        "!README.md",
+        "flake.lock",
+        "pkgs/vm-image/**",
+      ]
   workflow_dispatch:
 
 jobs:
   build:
-    name: Build ${{ matrix.arch }}
+    name: packages.${{ matrix.arch }}.vm-image
     strategy:
       matrix:
         include:
