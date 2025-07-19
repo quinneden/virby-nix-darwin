@@ -47,5 +47,5 @@ jobs:
           name: virby-nix-darwin
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
-      - name: Build vm-image (${{ matrix.arch }})
+      - name: Nix build
         run: nix build -L .#packages.${{ matrix.arch }}.vm-image
