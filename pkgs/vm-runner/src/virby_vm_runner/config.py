@@ -6,10 +6,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict
 
-from .constants import (
-    WORKING_DIRECTORY,
-    VM_USER,
-)
+from .constants import VM_USER, WORKING_DIRECTORY
 from .exceptions import VMConfigurationError
 
 logger = logging.getLogger(__name__)

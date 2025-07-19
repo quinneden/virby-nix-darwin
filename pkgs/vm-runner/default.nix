@@ -28,7 +28,9 @@ buildPythonPackage {
     "virby_vm_runner.exceptions"
     "virby_vm_runner.ip_discovery"
     "virby_vm_runner.runner"
+    "virby_vm_runner.socket_activation"
     "virby_vm_runner.ssh"
+    "virby_vm_runner.vm_process"
   ];
 
   preBuild = ''

@@ -4,11 +4,7 @@ import asyncio
 import logging
 from pathlib import Path
 
-from .constants import (
-    SSH_KNOWN_HOSTS_FILE_NAME,
-    SSH_USER_PRIVATE_KEY_FILE_NAME,
-    VM_USER,
-)
+from .constants import SSH_KNOWN_HOSTS_FILE_NAME, SSH_USER_PRIVATE_KEY_FILE_NAME, VM_USER
 
 logger = logging.getLogger(__name__)
 

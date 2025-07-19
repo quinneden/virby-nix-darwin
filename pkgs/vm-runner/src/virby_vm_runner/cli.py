@@ -67,10 +67,8 @@ async def main() -> int:
         config_file_env = os.getenv("VIRBY_VM_CONFIG_FILE")
         config = VMConfig(config_path=config_file_env)
 
-        # Setup logging based on config
         setup_logging(config.debug_enabled)
 
-        # Create and run VM
         runner = VirbyVMRunner(config)
         await runner.run()
 
