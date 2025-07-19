@@ -419,7 +419,6 @@ class VMProcess:
 
         if self.vm_process and self.vm_process.returncode is None:
             try:
-                # Since we removed os.setsid, we can terminate the process directly
                 self.vm_process.terminate()
                 logger.info(f"Sent SIGTERM to VM process {self.vm_process.pid}")
 
