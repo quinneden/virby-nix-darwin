@@ -70,46 +70,6 @@ class SocketActivation:
             logger.debug(f"Failed to call launch_activate_socket: {e}")
             return []
 
-    def debug_file_descriptors(self) -> None:
-        """Debug available file descriptors to diagnose socket issues."""
-        if not self.debug:
-            return
-
-        logger.debug("=== File Descriptor Debug Info ===")
-        for fd in range(10):  # Check first 10 file descriptors
-            try:
-                fd_stat = os.fstat(fd)
-                fd_mode = stat.S_IFMT(fd_stat.st_mode)
-
-                if stat.S_ISSOCK(fd_stat.st_mode):
-                    logger.debug(f"FD {fd}: SOCKET")
-                    try:
-                        # Try to get socket info
-                        test_sock = socket.fromfd(fd, socket.AF_INET, socket.SOCK_STREAM)
-                        sock_name = test_sock.getsockname()
-                        try:
-                            logger.debug(f"FD {fd}: Socket bound to {sock_name}")
-                        except Exception as log_e:
-                            logger.debug(f"FD {fd}: Socket (failed to log address: {log_e})")
-                        test_sock.close()
-                    except Exception as e:
-                        logger.debug(f"FD {fd}: Socket but failed to get info: {e}")
-                elif stat.S_ISREG(fd_stat.st_mode):
-                    logger.debug(f"FD {fd}: Regular file")
-                elif stat.S_ISFIFO(fd_stat.st_mode):
-                    logger.debug(f"FD {fd}: FIFO/pipe")
-                elif stat.S_ISCHR(fd_stat.st_mode):
-                    logger.debug(f"FD {fd}: Character device")
-                else:
-                    logger.debug(f"FD {fd}: Other type (mode: {oct(fd_mode)})")
-
-            except OSError as e:
-                if e.errno != 9:  # Not "Bad file descriptor"
-                    logger.debug(f"FD {fd}: Error accessing - {e}")
-            except Exception as e:
-                logger.debug(f"FD {fd}: Unexpected error - {e}")
-        logger.debug("=== End FD Debug Info ===")
-
     def get_activation_socket(self) -> socket.socket:
         """Get the socket passed by launchd for activation."""
         logger.debug("Attempting to find activation socket...")
