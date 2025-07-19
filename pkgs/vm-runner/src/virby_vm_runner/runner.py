@@ -33,10 +33,6 @@ class VirbyVMRunner:
         self._active_connections: int = 0
         self._last_connection_time: int | float = 0
 
-        # Debug file descriptors if in debug mode
-        if config.debug_enabled:
-            self.socket_activation.debug_file_descriptors()
-
     def _detect_on_demand_lifecycle(self) -> bool:
         """Detect if VM should use on-demand lifecycle."""
         is_on_demand = os.environ.get("VIRBY_ON_DEMAND") == "1"
@@ -72,6 +68,10 @@ class VirbyVMRunner:
 
     async def _ensure_vm_ready(self) -> None:
         """Ensure VM is started and ready for connections."""
+        # Check for shutdown signal
+        if os.environ.get("VIRBY_SHUTDOWN_REQUESTED"):
+            raise VMStartupError("Shutdown requested, not starting VM")
+
         vm_running = self.vm_process.is_running
 
         if not vm_running:
@@ -94,6 +94,11 @@ class VirbyVMRunner:
         self._last_connection_time = time.time()
 
         try:
+            # Check for early shutdown signal
+            if os.environ.get("VIRBY_SHUTDOWN_REQUESTED"):
+                logger.info("Early shutdown requested, rejecting connection")
+                return
+
             # Ensure VM is ready
             await self._ensure_vm_ready()
 
@@ -182,12 +187,17 @@ class VirbyVMRunner:
         shutdown_event = asyncio.Event()
 
         def signal_handler(signum, frame):
-            logger.info(f"Received signal {signum}")
+            logger.info(f"Received signal {signum} in main runner")
             shutdown_event.set()
 
-        # Set up signal handlers
+        # Set up signal handlers (these will override the early ones)
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGTERM, signal_handler)
+
+        # Check if early shutdown was requested
+        if os.environ.get("VIRBY_SHUTDOWN_REQUESTED"):
+            logger.info("Early shutdown detected, exiting immediately")
+            return
 
         try:
             self._activation_socket = self.socket_activation.get_activation_socket()

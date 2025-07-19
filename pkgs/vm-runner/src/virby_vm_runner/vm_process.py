@@ -1,10 +1,12 @@
 """VM process lifecycle management for Virby VM."""
 
 import asyncio
+import atexit
 import logging
 import os
 import random
 import signal
+import time
 from pathlib import Path
 
 from .config import VMConfig
@@ -19,6 +21,59 @@ from .ip_discovery import IPDiscovery
 from .ssh import wait_for_ssh_ready
 
 logger = logging.getLogger(__name__)
+
+
+def cleanup_orphaned_vfkit_processes(working_dir: Path) -> None:
+    """
+    Cleanup orphaned vfkit processes using PID files.
+
+    This function can be called during startup to clean up any processes
+    that were orphaned due to unclean shutdowns.
+    """
+    pid_file = working_dir / "vfkit.pid"
+
+    if not pid_file.exists():
+        return
+
+    try:
+        pid_str = pid_file.read_text().strip()
+        pid = int(pid_str)
+
+        logger.info(f"Found orphaned vfkit process with PID {pid}")
+
+        try:
+            os.kill(pid, 0)  # Check if process exists
+
+            # Process exists, try to kill it
+            logger.info(f"Killing orphaned vfkit process {pid}")
+            try:
+                os.kill(pid, signal.SIGTERM)
+                time.sleep(1)
+
+                # Check if still running and force kill
+                try:
+                    os.kill(pid, 0)
+                    os.kill(pid, signal.SIGKILL)
+                    logger.info(f"Force killed orphaned vfkit process {pid}")
+                except ProcessLookupError:
+                    logger.info(f"Orphaned vfkit process {pid} terminated gracefully")
+
+            except ProcessLookupError:
+                logger.debug(f"Orphaned vfkit process {pid} already dead")
+
+        except ProcessLookupError:
+            logger.debug(f"Orphaned vfkit process {pid} no longer exists")
+
+        # Remove PID file
+        pid_file.unlink()
+        logger.info("Cleaned up orphaned vfkit process")
+
+    except Exception as e:
+        logger.error(f"Error cleaning up orphaned vfkit process: {e}")
+        try:
+            pid_file.unlink()
+        except Exception:
+            pass
 
 
 class VMProcess:
@@ -48,6 +103,14 @@ class VMProcess:
         self._ip_address: str | None = None
         self._output_task: asyncio.Task | None = None
         self._shutdown_requested = False
+        self._parent_monitor_task: asyncio.Task | None = None
+
+        # Process management
+        self.pid_file = self.working_dir / "vfkit.pid"
+        self.parent_pid = os.getppid()
+
+        # Setup cleanup handler
+        atexit.register(self._cleanup_on_exit)
 
     def _generate_mac_address(self) -> str:
         """Generate a random MAC address for VM usage."""
@@ -103,7 +166,8 @@ class VMProcess:
         try:
             kwargs: dict = {
                 "cwd": self.working_dir,
-                "preexec_fn": os.setsid if hasattr(os, "setsid") else None,
+                # Remove os.setsid to prevent process detachment
+                # This allows better cleanup when parent dies
             }
 
             if self.config.debug_enabled:
@@ -123,6 +187,12 @@ class VMProcess:
 
             self.vm_process = await asyncio.create_subprocess_exec(*cmd, **kwargs)
             logger.info(f"VM started with PID {self.vm_process.pid}")
+
+            # Write PID file for external cleanup
+            self._write_pid_file(self.vm_process.pid)
+
+            # Start parent monitoring
+            self._parent_monitor_task = asyncio.create_task(self._monitor_parent_process())
 
             # Start background task to consume output if debug is enabled
             if self.config.debug_enabled and self.vm_process.stdout and self.vm_process.stderr:
@@ -187,6 +257,31 @@ class VMProcess:
         except Exception as e:
             logger.error(f"Error consuming VM output: {e}")
 
+    async def _monitor_parent_process(self) -> None:
+        """Monitor parent process and exit if it dies."""
+        logger.debug(f"Monitoring parent process {self.parent_pid}")
+
+        while not self._shutdown_requested:
+            try:
+                # Check for early shutdown signal
+                if os.environ.get("VIRBY_SHUTDOWN_REQUESTED"):
+                    logger.info("Early shutdown signal detected in parent monitor")
+                    self._shutdown_requested = True
+                    await self.stop()
+                    break
+
+                # Check if parent is still alive
+                os.kill(self.parent_pid, 0)  # Signal 0 just checks if process exists
+                await asyncio.sleep(5)  # Check every 5 seconds
+            except ProcessLookupError:
+                logger.warning(f"Parent process {self.parent_pid} died, shutting down VM")
+                self._shutdown_requested = True
+                await self.stop()
+                break
+            except Exception as e:
+                logger.error(f"Error monitoring parent process: {e}")
+                await asyncio.sleep(5)
+
     async def _monitor_vm(self) -> None:
         """Monitor VM process for unexpected death."""
         if self.vm_process:
@@ -201,9 +296,62 @@ class VMProcess:
             # Clean up VM state so it can be restarted
             self._cleanup_vm_state()
 
+    def _write_pid_file(self, pid: int) -> None:
+        """Write process PID to file for external cleanup."""
+        try:
+            self.pid_file.write_text(str(pid))
+            logger.debug(f"Wrote PID {pid} to {self.pid_file}")
+        except Exception as e:
+            logger.error(f"Error writing PID file: {e}")
+
+    def _cleanup_pid_file(self) -> None:
+        """Remove PID file."""
+        try:
+            if self.pid_file.exists():
+                self.pid_file.unlink()
+                logger.debug(f"Removed PID file {self.pid_file}")
+        except Exception as e:
+            logger.error(f"Error removing PID file: {e}")
+
+    def _cleanup_on_exit(self) -> None:
+        """Cleanup handler called by atexit."""
+        logger.debug("atexit cleanup handler called")
+        try:
+            self._cleanup_process_sync()
+            self._cleanup_pid_file()
+        except Exception as e:
+            logger.error(f"Error in atexit cleanup: {e}")
+
+    def _cleanup_process_sync(self) -> None:
+        """Synchronous process cleanup for atexit handler."""
+        if self.vm_process and self.vm_process.returncode is None:
+            try:
+                pid = self.vm_process.pid
+                logger.debug(f"Synchronously terminating VM process {pid}")
+
+                try:
+                    # Try graceful termination first
+                    os.kill(pid, signal.SIGTERM)
+                    time.sleep(2)
+
+                    # Force kill if still running
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass  # Already dead
+
+                except ProcessLookupError:
+                    pass  # Process already dead
+
+            except Exception as e:
+                logger.error(f"Error in synchronous process cleanup: {e}")
+
     def _cleanup_vm_state(self) -> None:
         """Clean up VM state after shutdown."""
-        # Cancel output consumption task
+        # Cancel monitoring tasks
+        if self._parent_monitor_task and not self._parent_monitor_task.done():
+            self._parent_monitor_task.cancel()
+
         if self._output_task and not self._output_task.done():
             self._output_task.cancel()
 
@@ -211,6 +359,10 @@ class VMProcess:
         self.vm_process = None
         self._ip_address = None
         self._output_task = None
+        self._parent_monitor_task = None
+
+        # Cleanup PID file
+        self._cleanup_pid_file()
 
     async def start(self) -> str:
         """
@@ -250,7 +402,14 @@ class VMProcess:
         logger.info("Stopping VM...")
         self._shutdown_requested = True
 
-        # Cancel output consumption task
+        # Cancel monitoring and output tasks
+        if self._parent_monitor_task and not self._parent_monitor_task.done():
+            self._parent_monitor_task.cancel()
+            try:
+                await self._parent_monitor_task
+            except asyncio.CancelledError:
+                pass
+
         if self._output_task and not self._output_task.done():
             self._output_task.cancel()
             try:
@@ -260,14 +419,9 @@ class VMProcess:
 
         if self.vm_process and self.vm_process.returncode is None:
             try:
-                # Kill process group
-                try:
-                    pgid = os.getpgid(self.vm_process.pid)
-                    os.killpg(pgid, signal.SIGTERM)
-                    logger.info(f"Sent SIGTERM to process group {pgid}")
-                except (ProcessLookupError, PermissionError):
-                    # Fallback to terminating just the main process
-                    self.vm_process.terminate()
+                # Since we removed os.setsid, we can terminate the process directly
+                self.vm_process.terminate()
+                logger.info(f"Sent SIGTERM to VM process {self.vm_process.pid}")
 
                 # Wait for graceful shutdown
                 try:
@@ -275,11 +429,7 @@ class VMProcess:
                     logger.info("VM stopped gracefully")
                 except asyncio.TimeoutError:
                     logger.warning("VM did not stop gracefully, killing...")
-                    try:
-                        pgid = os.getpgid(self.vm_process.pid)
-                        os.killpg(pgid, signal.SIGKILL)
-                    except (ProcessLookupError, PermissionError):
-                        self.vm_process.kill()
+                    self.vm_process.kill()
                     await self.vm_process.wait()
                     logger.info("VM killed")
             except Exception as e:
