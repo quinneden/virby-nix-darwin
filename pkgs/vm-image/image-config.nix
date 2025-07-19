@@ -167,6 +167,6 @@ in
   };
 
   virtualisation = {
-    rosetta = cfg.rosetta;
+    rosetta.enable = cfg.rosetta;
   };
 }
