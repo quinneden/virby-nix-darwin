@@ -23,7 +23,7 @@ Add virby to your flake inputs:
 ```
 
 > [!Important]
-> When enabling Virby for the first time, you must add the binary cache to your Nix configuration. This ensures that the prebuilt VM image is available for download, rather than having to be built locally, which requires an existing `aarch64-linux` builder. You can do this in one of two ways:
+> When enabling Virby for the first time, you must add the binary cache to your Nix configuration. This ensures that the prebuilt VM image is available for download, rather than having to be built locally, which requires an existing linux builder. You can do this in one of two ways:
 
 Add the binary cache to your configuration **before** enabling Virby:
 
@@ -40,7 +40,7 @@ Add the binary cache to your configuration **before** enabling Virby:
 }
 ```
 
-Then run `darwin-rebuild`, then enable Virby:
+Run `darwin-rebuild`, then enable Virby:
 
 ```nix
 {
@@ -51,9 +51,9 @@ Then run `darwin-rebuild`, then enable Virby:
     ];
   };
   
-  # Don't define any other options until after you've switched to the new configuration.
-  # If the hash for the disk image derivation doesn't match the one in the binary cache, then
-  # nix will try to build the image locally.
+  # Don't configure any other Virby options until after you've switched to the new configuration.
+  # If the hash for the disk image derivation doesn't match the one in the binary cache, then nix
+  # will try to build the image locally, which will fail if you don't have a linux builder available.
   services.virby.enable = true;
 }
 ```
@@ -107,20 +107,26 @@ services.virby.onDemand = {
 };
 ```
 
-**Rosetta Support** (Apple Silicon only)
+**Rosetta Support**
 
 ```nix
+# Requires `aarch64-darwin` host
 services.virby.rosetta = true;
 ```
 
 **Custom NixOS Configuration**
 
+
 ```nix
 services.virby.extraConfig = {
   inherit (config.nix) settings;
-  # Any valid NixOS configuration
+  # Some NixOS options which are defined in the default VM configuration cannot
+  # be overridden, such as `networking.hostName`. Others may be overridden with
+  # `lib.mkForce`.
 };
 ```
+> [!Warning]
+> This option allows you to arbitrarily change the NixOS configuration, which could possibly expose the VM to security risks.
 
 **Debug Options** (insecure, for troubleshooting only)
 
