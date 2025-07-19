@@ -224,7 +224,7 @@ in
       vmConfigJson = pkgs.writeText "virby-vm-config.json" (
         builtins.toJSON {
           memory = memoryMib;
-          ttl = cfg.onDemand.ttl * 60; # Convert minutes to seconds
+          ttl = cfg.onDemand.ttl * 60; # Convert to seconds
           inherit (cfg)
             debug
             cores
@@ -239,13 +239,15 @@ in
 
         set -euo pipefail
 
-        should_keygen() {
+        should_generate_ssh_keys() {
           local key_files=(
             ${sshdKeysSharedDirName}/${sshHostPrivateKeyFileName}
             ${sshdKeysSharedDirName}/${sshUserPublicKeyFileName}
             ${sshHostPublicKeyFileName}
             ${sshUserPrivateKeyFileName}
           )
+
+          [[ $NEEDS_GENERATE_SSH_KEYS == 1 ]] && return 0
 
           for file in "''${key_files[@]}"; do
             [[ ! -f $file ]] && return 0
@@ -282,8 +284,6 @@ in
           mv "$temp_user_key.pub" ${sshdKeysSharedDirName}/${sshUserPublicKeyFileName}
         }
 
-        trap 'rm -f vfkit-*-*.sock' EXIT INT TERM
-
         umask 'g-w,o='
         chmod 'g-w,o=x' .
 
@@ -291,12 +291,12 @@ in
         current_source_image_path=$(cat $source_image_path_marker 2>/dev/null) || true
 
         if [[ ! -f ${diffDiskPath} ]] || [[ $current_source_image_path != ${imageWithFinalConfig} ]]; then
-          ${logInfo} "Creating base/diff disk images..."
+          ${logInfo} "Creating VM disk images..."
 
           rm -f ${baseDiskPath} ${diffDiskPath}
 
           if ! cp ${sourceImagePath} ${baseDiskPath}; then
-            ${logError} "Failed to copy base disk image to ${baseDiskPath}"
+            ${logError} "Failed to copy source image to ${baseDiskPath}"
             exit 1
           fi
           ${logInfo} "Copied base disk image to ${baseDiskPath}"
@@ -305,18 +305,20 @@ in
             ${logError} "Failed to create diff disk image"
             exit 1
           fi
-          ${logInfo} "Created diff disk image at ${diffDiskPath} from backing image ${baseDiskPath}"
+          ${logInfo} "Created diff disk image: ${diffDiskPath}"
 
           if ! truncate -s ${cfg.diskSize} ${diffDiskPath}; then
-            ${logError} "Failed to resize diff disk to ${cfg.diskSize}"
+            ${logError} "Failed to resize diff disk image to ${cfg.diskSize}"
             exit 1
           fi
-          ${logInfo} "Resized diff disk to ${cfg.diskSize}"
+          ${logInfo} "Resized diff disk image to ${cfg.diskSize}"
 
-          echo ${imageWithFinalConfig} > $source_image_path_marker
+          echo ${imageWithFinalConfig} > "$source_image_path_marker"
+
+          NEEDS_GENERATE_SSH_KEYS=1
         fi
 
-        if should_keygen; then
+        if should_generate_ssh_keys; then
           ${logInfo} "Generating SSH keys..."
           if ! generate_ssh_keys; then
             ${logError} "Failed to generate SSH keys"
@@ -427,8 +429,9 @@ in
           if [[ ! -d ${workingDirectory} ]]; then
             logInfo "Setting up working directory..."
             mkdir -p ${workingDirectory}
-            chown ${darwinUser}:${darwinGroup} ${workingDirectory}
           fi
+
+          chown ${darwinUser}:${darwinGroup} ${workingDirectory}
         '';
 
         environment.etc."ssh/ssh_config.d/100-${vmHostName}.conf".text = ''
@@ -452,6 +455,7 @@ in
               WorkingDirectory = workingDirectory;
               KeepAlive = !cfg.onDemand.enable;
               ProcessType = "Adaptive";
+
               Sockets.Listener = {
                 SockFamily = "IPv4";
                 SockNodeName = "localhost";
