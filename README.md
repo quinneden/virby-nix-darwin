@@ -122,11 +122,12 @@ services.virby.extraConfig = {
   inherit (config.nix) settings;
   # Some NixOS options which are defined in the default VM configuration cannot
   # be overridden, such as `networking.hostName`. Others may be overridden with
-  # `lib.mkForce`.
+  # `lib.mkForce`. Also note that anything changed here will cause a rebuild of
+  # the VM image, and SSH keys will be regenerated.
 };
 ```
 > [!Warning]
-> This option allows you to arbitrarily change the NixOS configuration, which could possibly expose the VM to security risks.
+> This option allows you to arbitrarily change the NixOS configuration, which could expose the VM to security risks.
 
 **Debug Options** (insecure, for troubleshooting only)
 
@@ -136,9 +137,6 @@ services.virby = {
   allowUserSsh = true;  # Allow non-root SSH access
 };
 ```
-
-> [!Note]
-> Changes to `extraConfig` will cause the VM disk image and SSH keys to be recreated.
 
 ## Architecture
 
