@@ -122,6 +122,7 @@ in
       description = "Install sshd's host and authorized keys";
 
       path = with pkgs; [
+        coreutils
         mount
         umount
       ];
@@ -133,30 +134,19 @@ in
       serviceConfig.Type = "oneshot";
       unitConfig.ConditionPathExists = "!${authorizedKeysDir}/${vmUser}";
 
-      # must be idempotent in the face of partial failues
       script = ''
-        mkdir -p ${mountPoint} ${sshDirPath} ${authorizedKeysDir}
+        mkdir -p ${mountPoint}
         mount -t virtiofs -o nodev,noexec,nosuid,ro ${mountTag} ${mountPoint}
 
-        (
-          umask 'go='
-          cp ${mountPoint}/${sshHostPrivateKeyFileName} ${sshHostPrivateKeyPath}
-        )
-
-        cp ${mountPoint}/${sshUserPublicKeyFileName} ${authorizedKeysDir}/${vmUser}.tmp
-        chmod 'a+r' ${authorizedKeysDir}/${vmUser}.tmp
+        install -Dm600 -t ${sshDirPath} ${mountPoint}/${sshHostPrivateKeyFileName}
+        install -Dm644 ${mountPoint}/${sshUserPublicKeyFileName} ${authorizedKeysDir}/${vmUser}
 
         umount ${mountPoint}
         rm -rf ${mountPoint}
-
-        # must be last so only now `unitConfig.ConditionPathExists` triggers
-        mv ${authorizedKeysDir}/${vmUser}.tmp ${authorizedKeysDir}/${vmUser}
       '';
     };
 
   users = {
-    # console and (initial) SSH logins are purposefully disabled
-    # see: `systemd.services.install-sshd-keys`
     allowNoPasswordLogin = true;
     mutableUsers = false;
 
