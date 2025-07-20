@@ -9,6 +9,8 @@ import signal
 import time
 from pathlib import Path
 
+import httpx
+
 from .config import VMConfig
 from .constants import (
     DIFF_DISK_FILE_NAME,
@@ -103,11 +105,10 @@ class VMProcess:
         self._ip_address: str | None = None
         self._output_task: asyncio.Task | None = None
         self._shutdown_requested = False
-        self._parent_monitor_task: asyncio.Task | None = None
+        self._vfkit_api_port = self.config.port + 1
 
         # Process management
         self.pid_file = self.working_dir / "vfkit.pid"
-        self.parent_pid = os.getppid()
 
         # Setup cleanup handler
         atexit.register(self._cleanup_on_exit)
@@ -139,7 +140,7 @@ class VMProcess:
             "--device",
             f"virtio-net,nat,mac={self.mac_address}",
             "--restful-uri",
-            "tcp://localhost:31223",
+            f"tcp://localhost:{self._vfkit_api_port}",
             "--device",
             "virtio-rng",
             "--device",
@@ -155,6 +156,30 @@ class VMProcess:
 
         return cmd
 
+    async def _vfkit_api_request(
+        self, endpoint: str = "/vm/state", method: str = "POST", data: dict = {}
+    ) -> dict | None:
+        """Make a request to the VM's restful API."""
+        if not self.is_running:
+            raise VMRuntimeError("Cannot make API request: VM is not running")
+
+        url = f"http://localhost:{self._vfkit_api_port}{endpoint}"
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.request(method, url, json=data)
+                response.raise_for_status()
+                return response.json() or None
+
+        except httpx.HTTPError as e:
+            raise VMRuntimeError(f"vfkit API request failed: {e}")
+        except Exception as e:
+            raise VMRuntimeError(f"Unexpected error in vfkit API request: {e}")
+
+    async def _get_vm_state(self) -> dict:
+        """Get the current state of the VM via vfkit API."""
+        return await self._vfkit_api_request(method="GET") or {}
+
     async def _start_vm_process(self) -> None:
         """Start the VM process."""
         if self.vm_process is not None:
@@ -164,11 +189,7 @@ class VMProcess:
         logger.info(f"Starting VM with command: {' '.join(cmd)}")
 
         try:
-            kwargs: dict = {
-                "cwd": self.working_dir,
-                # Remove os.setsid to prevent process detachment
-                # This allows better cleanup when parent dies
-            }
+            kwargs: dict = {"cwd": self.working_dir}
 
             if self.config.debug_enabled:
                 kwargs.update(
@@ -191,9 +212,6 @@ class VMProcess:
             # Write PID file for external cleanup
             self._write_pid_file(self.vm_process.pid)
 
-            # Start parent monitoring
-            self._parent_monitor_task = asyncio.create_task(self._monitor_parent_process())
-
             # Start background task to consume output if debug is enabled
             if self.config.debug_enabled and self.vm_process.stdout and self.vm_process.stderr:
                 self._output_task = asyncio.create_task(self._consume_vm_output())
@@ -211,6 +229,9 @@ class VMProcess:
         max_interval = 5.0
 
         while (asyncio.get_event_loop().time() - start_time) < timeout:
+            # Check for shutdown signals
+            await self._check_shutdown_signals()
+
             if self._shutdown_requested:
                 raise VMRuntimeError("Shutdown requested during IP discovery")
 
@@ -257,30 +278,12 @@ class VMProcess:
         except Exception as e:
             logger.error(f"Error consuming VM output: {e}")
 
-    async def _monitor_parent_process(self) -> None:
-        """Monitor parent process and exit if it dies."""
-        logger.debug(f"Monitoring parent process {self.parent_pid}")
-
-        while not self._shutdown_requested:
-            try:
-                # Check for early shutdown signal
-                if os.environ.get("VIRBY_SHUTDOWN_REQUESTED"):
-                    logger.info("Early shutdown signal detected in parent monitor")
-                    self._shutdown_requested = True
-                    await self.stop()
-                    break
-
-                # Check if parent is still alive
-                os.kill(self.parent_pid, 0)  # Signal 0 just checks if process exists
-                await asyncio.sleep(5)  # Check every 5 seconds
-            except ProcessLookupError:
-                logger.warning(f"Parent process {self.parent_pid} died, shutting down VM")
-                self._shutdown_requested = True
-                await self.stop()
-                break
-            except Exception as e:
-                logger.error(f"Error monitoring parent process: {e}")
-                await asyncio.sleep(5)
+    async def _check_shutdown_signals(self) -> None:
+        """Check for shutdown signals from environment."""
+        if os.environ.get("VIRBY_SHUTDOWN_REQUESTED"):
+            logger.info("Early shutdown signal detected")
+            self._shutdown_requested = True
+            os.environ.pop("VIRBY_SHUTDOWN_REQUESTED", None)
 
     async def _monitor_vm(self) -> None:
         """Monitor VM process for unexpected death."""
@@ -348,10 +351,7 @@ class VMProcess:
 
     def _cleanup_vm_state(self) -> None:
         """Clean up VM state after shutdown."""
-        # Cancel monitoring tasks
-        if self._parent_monitor_task and not self._parent_monitor_task.done():
-            self._parent_monitor_task.cancel()
-
+        # Cancel output task
         if self._output_task and not self._output_task.done():
             self._output_task.cancel()
 
@@ -359,7 +359,6 @@ class VMProcess:
         self.vm_process = None
         self._ip_address = None
         self._output_task = None
-        self._parent_monitor_task = None
 
         # Cleanup PID file
         self._cleanup_pid_file()
@@ -402,14 +401,7 @@ class VMProcess:
         logger.info("Stopping VM...")
         self._shutdown_requested = True
 
-        # Cancel monitoring and output tasks
-        if self._parent_monitor_task and not self._parent_monitor_task.done():
-            self._parent_monitor_task.cancel()
-            try:
-                await self._parent_monitor_task
-            except asyncio.CancelledError:
-                pass
-
+        # Cancel output task
         if self._output_task and not self._output_task.done():
             self._output_task.cancel()
             try:
@@ -435,6 +427,42 @@ class VMProcess:
                 logger.error(f"Error stopping VM: {e}")
 
         self._cleanup_vm_state()
+
+    async def pause(self, timeout: int = 30) -> None:
+        """Pause the VM"""
+        logger.info("Pausing the VM...")
+        if self.vm_process and self.vm_process.returncode is None:
+            vm_state = await self._get_vm_state()
+            can_pause = vm_state.get("canPause", False)
+
+            if not can_pause:
+                logger.warning("VM cannot be paused, attempting to stop instead...")
+                await self.stop(timeout)
+                return
+            else:
+                try:
+                    await self._vfkit_api_request(data={"state": "Pause"})
+                    logger.info("VM paused")
+                except Exception as e:
+                    logger.error(f"Error pausing VM: {e}")
+
+    async def resume(self) -> None:
+        """Pause the VM"""
+        logger.info("Resuming the VM...")
+        if self.vm_process and self.vm_process.returncode is None:
+            vm_state = await self._get_vm_state()
+            can_resume = vm_state.get("canResume", False)
+
+            if not can_resume:
+                logger.warning("VM cannot resume, attempting to start instead...")
+                await self.start()
+                return
+            else:
+                try:
+                    await self._vfkit_api_request(data={"state": "Resume"})
+                    logger.info("VM resumed")
+                except Exception as e:
+                    logger.error(f"Error resuming VM: {e}")
 
     @property
     def is_running(self) -> bool:

@@ -70,7 +70,12 @@ class VirbyVMRunner:
         """Ensure VM is started and ready for connections."""
         # Check for shutdown signal
         if os.environ.get("VIRBY_SHUTDOWN_REQUESTED"):
+            os.environ.pop("VIRBY_SHUTDOWN_REQUESTED", None)
             raise VMStartupError("Shutdown requested, not starting VM")
+
+        # Also check VM process shutdown flag if it exists
+        if hasattr(self, "vm_process") and self.vm_process._shutdown_requested:
+            raise VMStartupError("VM shutdown already requested")
 
         vm_running = self.vm_process.is_running
 
@@ -97,6 +102,12 @@ class VirbyVMRunner:
             # Check for early shutdown signal
             if os.environ.get("VIRBY_SHUTDOWN_REQUESTED"):
                 logger.info("Early shutdown requested, rejecting connection")
+                os.environ.pop("VIRBY_SHUTDOWN_REQUESTED", None)
+                return
+
+            # Check VM process shutdown state
+            if hasattr(self, "vm_process") and self.vm_process._shutdown_requested:
+                logger.info("VM shutdown requested, rejecting connection")
                 return
 
             # Ensure VM is ready
@@ -182,6 +193,14 @@ class VirbyVMRunner:
         self._shutdown_requested = True
         await self.vm_process.stop(timeout)
 
+    async def resume(self) -> None:
+        """Resume the VM if it was paused."""
+        await self.vm_process.resume()
+
+    async def pause(self, timeout: int = 30) -> None:
+        """Pause the VM."""
+        await self.vm_process.pause(timeout)
+
     async def run(self) -> None:
         """Main run loop."""
         shutdown_event = asyncio.Event()
@@ -197,6 +216,7 @@ class VirbyVMRunner:
         # Check if early shutdown was requested
         if os.environ.get("VIRBY_SHUTDOWN_REQUESTED"):
             logger.info("Early shutdown detected, exiting immediately")
+            os.environ.pop("VIRBY_SHUTDOWN_REQUESTED", None)
             return
 
         try:
@@ -210,22 +230,44 @@ class VirbyVMRunner:
             # Start connection handling
             proxy_task = asyncio.create_task(self._handle_activation_connections())
 
-            # Wait for shutdown signal
+            # Add periodic check for VM shutdown requests and environment signals
+            async def monitor_shutdown_signals():
+                while not shutdown_event.is_set():
+                    # Check for environment shutdown signal
+                    if os.environ.get("VIRBY_SHUTDOWN_REQUESTED"):
+                        logger.info("Environment shutdown signal detected")
+                        os.environ.pop("VIRBY_SHUTDOWN_REQUESTED", None)
+                        shutdown_event.set()
+                        break
+
+                    # Check if VM process has requested shutdown
+                    if hasattr(self, "vm_process") and self.vm_process._shutdown_requested:
+                        logger.info("VM process requested shutdown")
+                        shutdown_event.set()
+                        break
+
+                    await asyncio.sleep(1)  # Check every second
+
+            monitor_task = asyncio.create_task(monitor_shutdown_signals())
+
+            # Wait for shutdown signal or tasks to complete
             await asyncio.wait(
                 [
                     asyncio.create_task(shutdown_event.wait()),
                     proxy_task,
+                    monitor_task,
                 ],
                 return_when=asyncio.FIRST_COMPLETED,
             )
 
-            # Cancel proxy task if it's still running
-            if not proxy_task.done():
-                proxy_task.cancel()
-                try:
-                    await proxy_task
-                except asyncio.CancelledError:
-                    pass
+            # Cancel remaining tasks
+            for task in [proxy_task, monitor_task]:
+                if not task.done():
+                    task.cancel()
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        pass
 
         except KeyboardInterrupt:
             logger.info("Received keyboard interrupt")

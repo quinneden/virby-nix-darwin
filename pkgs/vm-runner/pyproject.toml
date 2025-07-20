@@ -4,13 +4,17 @@ version = "0.1.0"
 description = "Vfkit-based VM runner for Virby, with automatic IP discovery and lifecycle management"
 requires-python = ">=3.10"
 authors = [{ name = "Quinn Edenfield", email = "quinn@qeden.dev" }]
-dependencies = ["aiofiles>=24.1.0"]
+dependencies = [
+    "aiofiles>=24.1.0",
+    "httpx>=0.28.1",
+]
 
 [project.scripts]
 virby-vm = "virby_vm_runner.cli:cli_main"
 
 [dependency-groups]
 dev = [
+  "ipython>=8.37.0",
   "isort>=5.12.0",
   "mypy>=1.0.0",
   "ruff>=0.1.0",

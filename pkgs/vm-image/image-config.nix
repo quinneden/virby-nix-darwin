@@ -79,12 +79,12 @@ in
   services = {
     getty = lib.optionalAttrs cfg.debug { autologinUser = vmUser; };
 
-    logind = lib.optionalAttrs cfg.onDemand.enable {
-      extraConfig = ''
-        IdleAction=poweroff
-        IdleActionSec=${toString cfg.onDemand.ttl}minutes
-      '';
-    };
+    # logind = lib.optionalAttrs cfg.onDemand.enable {
+    #   extraConfig = ''
+    #     IdleAction=poweroff
+    #     IdleActionSec=${toString cfg.onDemand.ttl}minutes
+    #   '';
+    # };
 
     openssh = {
       enable = true;

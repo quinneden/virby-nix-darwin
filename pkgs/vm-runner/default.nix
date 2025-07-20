@@ -4,6 +4,7 @@
   aiofiles,
   buildPythonPackage,
   hatchling,
+  httpx,
   vfkit,
 }:
 
@@ -17,6 +18,7 @@ buildPythonPackage {
   build-system = [ hatchling ];
   dependencies = [
     aiofiles
+    httpx
     vfkit
   ];
 
