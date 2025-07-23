@@ -38,9 +38,14 @@ def setup_early_signal_handling() -> None:
 def debug_startup_environment():
     """Debug environment and file descriptors at startup."""
     logger = logging.getLogger(__name__)
+
+    # Only do expensive debugging if explicitly requested
+    if not logger.isEnabledFor(logging.DEBUG):
+        return
+
     logger.debug("=== STARTUP DEBUG ===")
 
-    # Log key environment variables
+    # Log key environment variables efficiently
     env_vars = [
         "VIRBY_ON_DEMAND",
         "VIRBY_VM_CONFIG_FILE",
@@ -49,28 +54,26 @@ def debug_startup_environment():
         "LISTEN_PID",
         "LAUNCH_DAEMON_SOCKET_NAME",
     ]
+
+    env_info = []
     for var in env_vars:
         value = os.environ.get(var, "null")
-        logger.debug(f"ENV {var}={value}")
+        env_info.append(f"{var}={value}")
+    logger.debug(f"ENV: {', '.join(env_info)}")
 
-    # Debug file descriptors
-    logger.debug("File descriptors:")
-    for fd in range(10):
+    # Only check file descriptors if really needed and limit to first 5 FDs
+    socket_fds = []
+    for fd in range(5):  # Reduced from 10 to 5
         try:
             fd_stat = os.fstat(fd)
             if stat.S_ISSOCK(fd_stat.st_mode):
-                logger.debug(f"FD {fd}: SOCKET")
-            elif stat.S_ISREG(fd_stat.st_mode):
-                logger.debug(f"FD {fd}: FILE")
-            elif stat.S_ISFIFO(fd_stat.st_mode):
-                logger.debug(f"FD {fd}: PIPE")
-            elif stat.S_ISCHR(fd_stat.st_mode):
-                logger.debug(f"FD {fd}: CHAR_DEV")
-            else:
-                logger.debug(f"FD {fd}: OTHER")
-        except OSError as e:
-            if e.errno != 9:  # Not "Bad file descriptor"
-                logger.debug(f"FD {fd}: ERROR {e}")
+                socket_fds.append(str(fd))
+        except OSError:
+            continue
+
+    if socket_fds:
+        logger.debug(f"Socket FDs: {', '.join(socket_fds)}")
+
     logger.debug("=== END STARTUP DEBUG ===")
 
 

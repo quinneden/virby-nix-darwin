@@ -20,7 +20,7 @@ from .constants import (
 )
 from .exceptions import VMRuntimeError, VMStartupError
 from .ip_discovery import IPDiscovery
-from .ssh import wait_for_ssh_ready
+from .ssh import SSHConnectivityTester
 
 logger = logging.getLogger(__name__)
 
@@ -34,43 +34,42 @@ def cleanup_orphaned_vfkit_processes(working_dir: Path) -> None:
     """
     pid_file = working_dir / "vfkit.pid"
 
+    # Quick check - if no PID file, no cleanup needed
     if not pid_file.exists():
         return
 
     try:
         pid_str = pid_file.read_text().strip()
+        if not pid_str:  # Empty file
+            pid_file.unlink()
+            return
+
         pid = int(pid_str)
 
-        logger.info(f"Found orphaned vfkit process with PID {pid}")
-
+        # Quick check if process exists
         try:
-            os.kill(pid, 0)  # Check if process exists
+            os.kill(pid, 0)  # Process exists
+            logger.info(f"Found orphaned vfkit process with PID {pid}")
 
-            # Process exists, try to kill it
-            logger.info(f"Killing orphaned vfkit process {pid}")
+            # Kill gracefully then forcefully if needed
+            os.kill(pid, signal.SIGTERM)
+            time.sleep(0.5)  # Reduced wait time from 1s to 0.5s
+
             try:
-                os.kill(pid, signal.SIGTERM)
-                time.sleep(1)
-
-                # Check if still running and force kill
-                try:
-                    os.kill(pid, 0)
-                    os.kill(pid, signal.SIGKILL)
-                    logger.info(f"Force killed orphaned vfkit process {pid}")
-                except ProcessLookupError:
-                    logger.info(f"Orphaned vfkit process {pid} terminated gracefully")
-
+                os.kill(pid, 0)  # Still exists?
+                os.kill(pid, signal.SIGKILL)
+                logger.info(f"Force killed orphaned vfkit process {pid}")
             except ProcessLookupError:
-                logger.debug(f"Orphaned vfkit process {pid} already dead")
+                logger.info(f"Orphaned vfkit process {pid} terminated gracefully")
 
         except ProcessLookupError:
+            # Process doesn't exist, just clean up the PID file
             logger.debug(f"Orphaned vfkit process {pid} no longer exists")
 
-        # Remove PID file
         pid_file.unlink()
         logger.info("Cleaned up orphaned vfkit process")
 
-    except Exception as e:
+    except (ValueError, OSError) as e:
         logger.error(f"Error cleaning up orphaned vfkit process: {e}")
         try:
             pid_file.unlink()
@@ -214,7 +213,7 @@ class VMProcess:
 
             # Start background task to consume output if debug is enabled
             if self.config.debug_enabled and self.vm_process.stdout and self.vm_process.stderr:
-                self._output_task = asyncio.create_task(self._consume_vm_output())
+                self._output_task = asyncio.create_task(self._consume_vm_process_output())
 
         except Exception as e:
             raise VMStartupError(f"Failed to start VM process: {e}")
@@ -225,8 +224,8 @@ class VMProcess:
 
         timeout = self.config.ip_discovery_timeout
         start_time = asyncio.get_event_loop().time()
-        interval = 1.0
-        max_interval = 5.0
+        interval = 0.1  # Start with 100ms instead of 1s for faster discovery
+        max_interval = 2.0  # Reduced max interval from 5s to 2s
 
         while (asyncio.get_event_loop().time() - start_time) < timeout:
             # Check for shutdown signals
@@ -245,17 +244,13 @@ class VMProcess:
                 return ip
 
             await asyncio.sleep(interval)
-            interval = min(interval * 1.2, max_interval)
+            # Exponential backoff: 100ms -> 200ms -> 400ms -> 800ms -> 1.6s -> 2s
+            interval = min(interval * 2, max_interval)
 
         raise VMRuntimeError(f"Failed to discover VM IP within {timeout} seconds")
 
-    async def _wait_for_ssh(self, ip: str) -> None:
-        """Wait for SSH to become ready."""
-        if not await wait_for_ssh_ready(ip, self.working_dir, self.config.ssh_ready_timeout):
-            raise VMRuntimeError("SSH did not become ready in time")
-
-    async def _consume_vm_output(self) -> None:
-        """Consume VM stdout/stderr to prevent buffer overflow."""
+    async def _consume_vm_process_output(self) -> None:
+        """Consume VM process (vfkit) stdout/stderr to prevent buffer overflow."""
         if not self.vm_process or not self.vm_process.stdout or not self.vm_process.stderr:
             return
 
@@ -379,14 +374,17 @@ class VMProcess:
             # Start monitoring task
             asyncio.create_task(self._monitor_vm())
 
-            # Give VM time to boot
-            await asyncio.sleep(5)
+            # Pre-create SSH tester while discovering IP
+            ssh_tester = SSHConnectivityTester(self.working_dir)
 
             # Discover IP
             ip = await self._discover_ip_address()
 
+            logger.info(f"VM IP discovered: {ip}, testing SSH connectivity...")
+
             # Wait for SSH
-            await self._wait_for_ssh(ip)
+            if not await self._wait_for_ssh(ip, ssh_tester):
+                raise VMRuntimeError("SSH did not become ready in time")
 
             logger.info(f"VM is ready at {ip}")
             return ip
@@ -395,6 +393,26 @@ class VMProcess:
             logger.error(f"Failed to start VM: {e}")
             await self.stop()
             raise
+
+    async def _wait_for_ssh(self, ip: str, ssh_tester) -> bool:
+        """Wait for SSH to become ready."""
+        logger.info(f"Waiting for SSH connectivity to {ip}")
+
+        timeout = self.config.ssh_ready_timeout
+        start_time = asyncio.get_event_loop().time()
+        check_interval = 0.25  # Start with 250ms
+
+        while (asyncio.get_event_loop().time() - start_time) < timeout:
+            if await ssh_tester.test_connectivity(ip, timeout=5):
+                logger.info("SSH is ready")
+                return True
+
+            await asyncio.sleep(check_interval)
+            # Gradual backoff
+            check_interval = min(check_interval * 1.5, 1.0)
+
+        logger.warning(f"SSH not ready within {timeout} seconds")
+        return False
 
     async def stop(self, timeout: int = 30) -> None:
         """Stop the VM gracefully."""

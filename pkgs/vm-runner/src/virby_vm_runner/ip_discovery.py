@@ -11,6 +11,7 @@ from .exceptions import IPDiscoveryError
 
 logger = logging.getLogger(__name__)
 
+
 # Regex for trimming leading zeros from MAC addresses
 LEADING_ZERO_REGEXP = re.compile(r"0([A-Fa-f0-9](:|$))")
 
@@ -45,6 +46,9 @@ class IPDiscovery:
         """
         self.mac_address = self._normalize_mac(mac_address)
         self.leases_file = leases_file
+        # Cache for file reading optimization
+        self._cached_entries: list[DHCPEntry] | None = None
+        self._cached_mtime: float | None = None
 
     def _normalize_mac(self, mac: str) -> str:
         """Normalize MAC address by trimming leading zeros."""
@@ -58,13 +62,27 @@ class IPDiscovery:
             IP address if found, None otherwise
         """
         try:
-            if not Path(self.leases_file).exists():
+            leases_path = Path(self.leases_file)
+            if not leases_path.exists():
                 logger.debug(f"DHCP leases file not found: {self.leases_file}")
                 return None
 
-            async with aiofiles.open(self.leases_file, "r") as file:
-                content = await file.read()
-                entries = self._parse_dhcp_leases(content)
+            # Check if file has been modified since last read
+            current_mtime = leases_path.stat().st_mtime
+            if (
+                self._cached_entries is not None
+                and self._cached_mtime is not None
+                and current_mtime == self._cached_mtime
+            ):
+                # Use cached entries
+                entries = self._cached_entries
+            else:
+                # Read and cache new entries
+                async with aiofiles.open(self.leases_file, "r") as file:
+                    content = await file.read()
+                    entries = self._parse_dhcp_leases(content)
+                    self._cached_entries = entries
+                    self._cached_mtime = current_mtime
 
             for entry in entries:
                 if entry.hw_address == self.mac_address:
@@ -76,6 +94,9 @@ class IPDiscovery:
 
         except (OSError, IOError) as e:
             logger.error(f"Failed to read DHCP leases file {self.leases_file}: {e}")
+            # Clear cache on error
+            self._cached_entries = None
+            self._cached_mtime = None
             return None
         except Exception as e:
             logger.error(f"Unexpected error discovering IP for MAC {self.mac_address}: {e}")
