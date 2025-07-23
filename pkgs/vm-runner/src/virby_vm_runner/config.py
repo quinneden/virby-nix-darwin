@@ -145,4 +145,17 @@ class VMConfig:
 
     def __repr__(self) -> str:
         """String representation of configuration."""
-        return f"VMConfig(cores={self.cores}, memory={self.memory}MiB, debug={self.debug_enabled}, port={self.port}, rosetta_enabled={self.rosetta_enabled}, working_directory={self.working_directory}, ip_discovery_timeout={self.ip_discovery_timeout}, ssh_ready_timeout={self.ssh_ready_timeout}, ttl={self.ttl}, VM_USER={self.VM_USER})"
+        return ", ".join(
+            [
+                f"VMConfig(cores={self.cores}",
+                f"debug={self.debug_enabled}",
+                f"ip_discovery_timeout={self.ip_discovery_timeout}",
+                f"memory={self.memory}MiB",
+                f"port={self.port}",
+                f"rosetta_enabled={self.rosetta_enabled}",
+                f"ssh_ready_timeout={self.ssh_ready_timeout}",
+                f"ttl={self.ttl}",
+                f"VM_USER={self.VM_USER}",
+                f"working_directory={self.working_directory})",
+            ]
+        )
