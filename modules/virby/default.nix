@@ -466,7 +466,8 @@ in
                 VIRBY_VM_CONFIG_FILE = toString vmConfigJson;
                 VIRBY_ON_DEMAND = if cfg.onDemand.enable then "1" else "0";
               };
-            } // lib.optionalAttrs cfg.debug { StandardOutPath = "/tmp/${daemonName}.log"; };
+            }
+            // lib.optionalAttrs cfg.debug { StandardOutPath = "/tmp/${daemonName}.log"; };
           };
         };
 
