@@ -239,6 +239,8 @@ in
 
         set -euo pipefail
 
+        NEEDS_GENERATE_SSH_KEYS=0
+
         should_generate_ssh_keys() {
           local key_files=(
             ${sshdKeysSharedDirName}/${sshHostPrivateKeyFileName}
