@@ -47,7 +47,6 @@ def debug_startup_environment():
 
     # Log key environment variables efficiently
     env_vars = [
-        "VIRBY_ON_DEMAND",
         "VIRBY_VM_CONFIG_FILE",
         "VIRBY_WORKING_DIRECTORY",
         "LISTEN_FDS",

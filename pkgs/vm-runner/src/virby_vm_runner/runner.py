@@ -28,19 +28,9 @@ class VirbyVMRunner:
 
         # Runner state
         self._shutdown_requested = False
-        self._is_on_demand = self._detect_on_demand_lifecycle()
         self._activation_socket: socket.socket | None = None
         self._active_connections: int = 0
         self._last_connection_time: int | float = 0
-
-    def _detect_on_demand_lifecycle(self) -> bool:
-        """Detect if VM should use on-demand lifecycle."""
-        is_on_demand = os.environ.get("VIRBY_ON_DEMAND") == "1"
-        if is_on_demand:
-            logger.debug("On-demand lifecycle detected via VIRBY_ON_DEMAND=1")
-        else:
-            logger.debug("Standard lifecycle detected via VIRBY_ON_DEMAND=0")
-        return is_on_demand
 
     async def _handle_activation_connections(self) -> None:
         """Handle incoming connections on the activation socket."""
@@ -80,7 +70,7 @@ class VirbyVMRunner:
         vm_running = self.vm_process.is_running
 
         if not vm_running:
-            if self._is_on_demand:
+            if self.config.on_demand_enabled:
                 logger.info("Starting VM for on-demand connection")
             else:
                 logger.info("Starting VM for always-on connection")
@@ -160,7 +150,7 @@ class VirbyVMRunner:
                 pass
 
             # In on-demand mode, schedule shutdown check after connection ends
-            if self._is_on_demand and self._active_connections == 0:
+            if self.config.on_demand_enabled and self._active_connections == 0:
                 asyncio.create_task(self._schedule_shutdown_check())
 
     async def _schedule_shutdown_check(self) -> None:
@@ -223,7 +213,7 @@ class VirbyVMRunner:
             self._activation_socket = self.socket_activation.get_activation_socket()
 
             # Start VM immediately if not on-demand
-            if not self._is_on_demand:
+            if not self.config.on_demand_enabled:
                 logger.info("Starting VM")
                 await self.start()
 

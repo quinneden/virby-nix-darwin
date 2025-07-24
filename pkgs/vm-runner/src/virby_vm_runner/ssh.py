@@ -153,39 +153,3 @@ async def test_ssh_connectivity(
     except Exception as e:
         logger.debug(f"SSH connectivity test failed: {e}")
         return False
-
-
-async def wait_for_ssh_ready(
-    ip_address: str,
-    working_dir: Path,
-    timeout: int = 30,
-    check_interval: float = 0.25,  # Reduced from 1 second to 250ms
-) -> bool:
-    """
-    Wait for SSH to become ready on the VM.
-
-    Args:
-        ip_address: IP address of the VM
-        working_dir: Working directory containing SSH keys
-        timeout: Total timeout in seconds
-        check_interval: Initial interval between checks in seconds
-
-    Returns:
-        True if SSH becomes ready within timeout, False otherwise
-    """
-    logger.info(f"Waiting for SSH connectivity to {ip_address}")
-
-    tester = SSHConnectivityTester(working_dir)
-    start_time = asyncio.get_event_loop().time()
-
-    while (asyncio.get_event_loop().time() - start_time) < timeout:
-        if await tester.test_connectivity(ip_address, timeout=5):
-            logger.info("SSH is ready")
-            return True
-
-        await asyncio.sleep(check_interval)
-        # Gradual backoff: 250ms -> 500ms -> 1s
-        check_interval = min(check_interval * 2, 1.0)
-
-    logger.warning(f"SSH not ready within {timeout} seconds")
-    return False

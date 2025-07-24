@@ -71,7 +71,7 @@ class VMConfig:
         debug = self._config.get("debug", False)
         if not isinstance(debug, bool):
             raise VMConfigurationError(f"Invalid debug setting: {debug}. Expected: boolean")
-        self._debug = debug
+        self._debug_enabled = debug
 
         # Validate and store port
         port = self._config.get("port", None)
@@ -87,10 +87,21 @@ class VMConfig:
             raise VMConfigurationError(f"Invalid rosetta setting: {rosetta}. Expected: boolean")
         self._rosetta_enabled = rosetta
 
+        # Validate and store on-demand
+        on_demand = self._config.get("on-demand", False)
+        if not isinstance(on_demand, bool):
+            raise VMConfigurationError(f"Invalid on-demand setting: {on_demand}. Expected: boolean")
+        self._on_demand_enabled = on_demand
+
+        # Validate and store TTL
+        ttl = self._config.get("ttl", 10800)
+        if not isinstance(ttl, int) or ttl < 0:
+            raise VMConfigurationError(f"Invalid ttl: {ttl}. Expected: non-negative integer")
+        self._ttl = ttl
+
         # Store other config values
         self._ip_discovery_timeout = self._config.get("ip_discovery_timeout", 60)
         self._ssh_ready_timeout = self._config.get("ssh_ready_timeout", 60)
-        self._ttl = self._config.get("ttl", 10800)
 
     @property
     def cores(self) -> int:
@@ -105,7 +116,7 @@ class VMConfig:
     @property
     def debug_enabled(self) -> bool:
         """Check if debug mode is enabled."""
-        return self._debug
+        return self._debug_enabled
 
     @property
     def port(self) -> int:
@@ -139,6 +150,11 @@ class VMConfig:
         return int(self._ssh_ready_timeout)
 
     @property
+    def on_demand_enabled(self) -> bool:
+        """Check if on-demand activation is enabled."""
+        return bool(self._on_demand_enabled)
+
+    @property
     def ttl(self) -> int:
         """Get TTL (time to live) in seconds for on-demand VM shutdown."""
         return int(self._ttl)
@@ -154,6 +170,7 @@ class VMConfig:
                 f"port={self.port}",
                 f"rosetta_enabled={self.rosetta_enabled}",
                 f"ssh_ready_timeout={self.ssh_ready_timeout}",
+                f"on_demand_enabled={self._on_demand_enabled}",
                 f"ttl={self.ttl}",
                 f"VM_USER={self.VM_USER}",
                 f"working_directory={self.working_directory})",

@@ -400,7 +400,7 @@ class VMProcess:
 
         timeout = self.config.ssh_ready_timeout
         start_time = asyncio.get_event_loop().time()
-        check_interval = 0.25  # Start with 250ms
+        check_interval = 0.5
 
         while (asyncio.get_event_loop().time() - start_time) < timeout:
             if await ssh_tester.test_connectivity(ip, timeout=5):

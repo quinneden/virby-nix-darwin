@@ -209,7 +209,6 @@ in
       diffDiskPath = "${workingDirectory}/${diffDiskFileName}";
       sourceImagePath = "${imageWithFinalConfig}/${imageWithFinalConfig.passthru.filePath}";
 
-      memoryMib = if lib.isString cfg.memory then parseMemoryString cfg.memory else cfg.memory;
       sshHostKeyAlias = "${vmHostName}-key";
 
       daemonName = "virbyd";
@@ -223,14 +222,13 @@ in
 
       vmConfigJson = pkgs.writeText "virby-vm-config.json" (
         builtins.toJSON {
-          memory = memoryMib;
+          cores = cfg.cores;
+          debug = cfg.debug;
+          memory = if lib.isString cfg.memory then (parseMemoryString cfg.memory) else cfg.memory;
+          on-demand = cfg.onDemand.enable;
+          port = cfg.port;
+          rosetta = cfg.rosetta;
           ttl = cfg.onDemand.ttl * 60; # Convert to seconds
-          inherit (cfg)
-            debug
-            cores
-            rosetta
-            port
-            ;
         }
       );
 
@@ -439,6 +437,7 @@ in
         environment.etc."ssh/ssh_config.d/100-${vmHostName}.conf".text = ''
           Host ${vmHostName}
             GlobalKnownHostsFile ${workingDirectory}/${sshKnownHostsFileName}
+            UserKnownHostsFile /dev/null
             HostKeyAlias ${sshHostKeyAlias}
             Hostname localhost
             IdentityFile ${workingDirectory}/${sshUserPrivateKeyFileName}
@@ -456,7 +455,6 @@ in
               UserName = darwinUser;
               WorkingDirectory = workingDirectory;
               KeepAlive = !cfg.onDemand.enable;
-              ProcessType = "Adaptive";
 
               Sockets.Listener = {
                 SockFamily = "IPv4";
@@ -466,7 +464,6 @@ in
 
               EnvironmentVariables = {
                 VIRBY_VM_CONFIG_FILE = toString vmConfigJson;
-                VIRBY_ON_DEMAND = if cfg.onDemand.enable then "1" else "0";
               };
             }
             // lib.optionalAttrs cfg.debug { StandardOutPath = "/tmp/${daemonName}.log"; };
