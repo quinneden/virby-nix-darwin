@@ -35,6 +35,13 @@
           vm-image = pkgs.callPackage ./pkgs/vm-image { inherit _lib inputs lib; };
         });
 
+      apps = perDarwinSystem (pkgs: {
+        benchmark-vm = {
+          type = "app";
+          program = lib.getExe (pkgs.callPackage ./scripts/benchmark { });
+        };
+      });
+
       devShells = perDarwinSystem (pkgs: {
         default = pkgs.mkShellNoCC {
           name = "virby-dev";

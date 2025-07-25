@@ -16,6 +16,7 @@ result/
 .env
 test/
 virby-vm-benchmark-*.md
+benchmark-results/
 
 # Misc
 *.bak
