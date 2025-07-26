@@ -47,9 +47,9 @@ Run `darwin-rebuild`, then enable Virby:
     "virby-nix-darwin.cachix.org-1:z9GiEZeBU5bEeoDQjyfHPMGPBaIQJOOvYOOjGMKIlLo="
   ];
   
-  # Don't configure any other Virby options until after you've switched to the new configuration.
-  # If the hash for the disk image derivation doesn't match the one in the binary cache, then nix
-  # will try to build the image locally, which will fail if you don't have a linux builder available.
+  # Don't configure any other Virby options until after you've switched to the new
+  # configuration. If the hash for the disk image derivation doesn't match the one
+  # in the binary cache, then nix will try to build the image locally.
   services.virby.enable = true;
 }
 ```
