@@ -15,6 +15,6 @@ writeShellApplication {
   ];
 
   text = ''
-    bash ${./benchmark.sh} "$@"
+    bash ${./benchmark-vm.sh} "$@"
   '';
 }

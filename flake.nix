@@ -38,7 +38,7 @@
       apps = perDarwinSystem (pkgs: {
         benchmark-vm = {
           type = "app";
-          program = lib.getExe (pkgs.callPackage ./scripts/benchmark { });
+          program = lib.getExe (pkgs.callPackage ./scripts/benchmark-vm { });
         };
       });
 
