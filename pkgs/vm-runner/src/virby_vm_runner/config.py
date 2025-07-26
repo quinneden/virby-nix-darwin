@@ -16,8 +16,7 @@ class VMConfig:
     """VM configuration management."""
 
     def __init__(self, config_path: str | None = None):
-        """
-        Initialize VM configuration.
+        """Initialize VM configuration.
 
         Args:
             config_path: Path to JSON configuration file.

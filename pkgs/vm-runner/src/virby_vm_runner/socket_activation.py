@@ -16,8 +16,7 @@ class SocketActivation:
     """Handles launchd socket activation and file descriptor management."""
 
     def __init__(self, port: int, debug: bool = False):
-        """
-        Initialize socket activation manager.
+        """Initialize socket activation manager.
 
         Args:
             port: Expected port number for socket activation

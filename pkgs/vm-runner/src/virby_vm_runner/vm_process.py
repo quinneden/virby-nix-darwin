@@ -26,8 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 def cleanup_orphaned_vfkit_processes(working_dir: Path) -> None:
-    """
-    Cleanup orphaned vfkit processes using PID files.
+    """Cleanup orphaned vfkit processes using PID files.
 
     This function can be called during startup to clean up any processes
     that were orphaned due to unclean shutdowns.
@@ -81,8 +80,7 @@ class VMProcess:
     """Manages VM process lifecycle independent of networking concerns."""
 
     def __init__(self, config: VMConfig, working_dir: Path):
-        """
-        Initialize VM process manager.
+        """Initialize VM process manager.
 
         Args:
             config: VM configuration
@@ -359,8 +357,7 @@ class VMProcess:
         self._cleanup_pid_file()
 
     async def start(self) -> str:
-        """
-        Start the VM and wait for it to be ready.
+        """Start the VM and wait for it to be ready.
 
         Returns:
             IP address of the started VM

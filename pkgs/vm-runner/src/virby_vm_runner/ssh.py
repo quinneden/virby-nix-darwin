@@ -18,7 +18,6 @@ class SSHConnectivityTester:
         self.ssh_key_path = working_dir / SSH_USER_PRIVATE_KEY_FILE_NAME
         self.known_hosts_path = working_dir / SSH_KNOWN_HOSTS_FILE_NAME
 
-        # Pre-build SSH command template
         self._ssh_base_command = [
             "ssh",
             "-o",
@@ -43,7 +42,6 @@ class SSHConnectivityTester:
             logger.debug(f"SSH key not found at {self.ssh_key_path}")
             return False
 
-        # Build final command with IP
         ssh_command = self._ssh_base_command + [
             "-o",
             f"ConnectTimeout={timeout}",
@@ -80,8 +78,7 @@ async def test_ssh_connectivity(
     timeout: int = 30,
     username: str = VM_USER,
 ) -> bool:
-    """
-    Test SSH connectivity to a VM.
+    """Test SSH connectivity to a VM.
 
     Args:
         ip_address: IP address of the VM
@@ -99,7 +96,6 @@ async def test_ssh_connectivity(
         logger.debug(f"SSH key not found at {ssh_key_path}")
         return False
 
-    # Build SSH command for testing
     ssh_command = [
         "ssh",
         "-o",

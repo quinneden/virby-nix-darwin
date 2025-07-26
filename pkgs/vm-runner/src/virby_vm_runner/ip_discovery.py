@@ -37,8 +37,7 @@ class IPDiscovery:
     """Discovers VM IP address via DHCP lease file parsing."""
 
     def __init__(self, mac_address: str, leases_file: str = DHCPD_LEASES_FILE_PATH):
-        """
-        Initialize IP discovery.
+        """Initialize IP discovery.
 
         Args:
             mac_address: MAC address to search for
@@ -55,8 +54,7 @@ class IPDiscovery:
         return LEADING_ZERO_REGEXP.sub(r"\1", mac.lower())
 
     async def discover_ip(self) -> str | None:
-        """
-        Discover IP address for the configured MAC address.
+        """Discover IP address for the configured MAC address.
 
         Returns:
             IP address if found, None otherwise
@@ -103,8 +101,7 @@ class IPDiscovery:
             raise IPDiscoveryError(f"IP discovery failed: {e}") from e
 
     def _parse_dhcp_leases(self, content: str) -> list[DHCPEntry]:
-        """
-        Parse DHCP leases file content.
+        """Parse DHCP leases file content.
 
         Args:
             content: Raw file content

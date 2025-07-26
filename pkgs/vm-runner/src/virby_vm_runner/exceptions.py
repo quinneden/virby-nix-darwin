@@ -1,4 +1,4 @@
-"""Custom exceptions for the Virby VM runner."""
+"""Exceptions for the Virby VM runner."""
 
 
 class VirbyVMError(Exception):
