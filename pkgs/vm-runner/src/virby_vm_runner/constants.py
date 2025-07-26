@@ -1,5 +1,4 @@
-"""
-Variable constants for Virby
+"""Variable constants for Virby
 
 WARNING: This file's contents are overwritten as part of the nix build process. The values here are
 just for testing without building the nix package. The actual values used in the package are
