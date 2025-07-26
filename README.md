@@ -157,6 +157,13 @@ Virby integrates three components:
 - SSH keys are generated and copied to the VM on first run.
 - `builder` user has minimal permissions, root access is restricted by default
 
+## Benchmarks
+
+| Test | Mean [s] | Min [s] | Max [s] | Relative |
+|:---|---:|---:|---:|---:|
+| Boot (cold start) | 9.203 ± 0.703 | 7.795 | 9.818 | 1.00 |
+| Build (`nix build --no-link --rebuild nixpkgs#hello`) | 8.136 ± 0.031 | 8.087 | 8.173 | 1.00 |
+
 ## Troubleshooting
 
 **Debug logging**
