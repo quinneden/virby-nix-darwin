@@ -3,14 +3,17 @@
 import asyncio
 import atexit
 import logging
+import fcntl
 import os
 import random
 import signal
+import tempfile
 import time
 from pathlib import Path
+from typing import Optional, Callable, Any
 
-import httpx
-
+from .api import VfkitAPIClient, VirtualMachineState
+from .circuit_breaker import CircuitBreaker
 from .config import VMConfig
 from .constants import (
     DIFF_DISK_FILE_NAME,
@@ -25,55 +28,148 @@ from .ssh import SSHConnectivityTester
 logger = logging.getLogger(__name__)
 
 
-def cleanup_orphaned_vfkit_processes(working_dir: Path) -> None:
-    """Cleanup orphaned vfkit processes using PID files.
+async def with_timeout(
+    coro: Callable[..., Any], timeout: float, operation_name: str, *args, **kwargs
+) -> Any:
+    """Execute coroutine with timeout and proper error handling."""
+    try:
+        return await asyncio.wait_for(coro(*args, **kwargs), timeout=timeout)
+    except asyncio.TimeoutError:
+        raise VMRuntimeError(f"{operation_name} timed out after {timeout} seconds")
+
+
+class VMProcessState:
+    """VM process state enumeration."""
+
+    RUNNING = "running"
+    STOPPED = "stopped"
+    PAUSED = "paused"
+    UNKNOWN = "unknown"
+
+
+async def cleanup_orphaned_vfkit_processes(working_dir: Path) -> None:
+    """Async cleanup of orphaned vfkit processes using PID files.
 
     This function can be called during startup to clean up any processes
     that were orphaned due to unclean shutdowns.
     """
     pid_file = working_dir / "vfkit.pid"
 
-    # Quick check - if no PID file, no cleanup needed
-    if not pid_file.exists():
-        return
-
     try:
-        pid_str = pid_file.read_text().strip()
-        if not pid_str:  # Empty file
-            pid_file.unlink()
-            return
+        with open(pid_file, "r") as f:
+            fcntl.flock(f.fileno(), fcntl.LOCK_SH | fcntl.LOCK_NB)
+            pid_str = f.read().strip()
 
-        pid = int(pid_str)
-
-        # Quick check if process exists
-        try:
-            os.kill(pid, 0)  # Process exists
-            logger.info(f"Found orphaned vfkit process with PID {pid}")
-
-            # Kill gracefully then forcefully if needed
-            os.kill(pid, signal.SIGTERM)
-            time.sleep(0.5)  # Reduced wait time from 1s to 0.5s
+            if not pid_str:
+                pid_file.unlink(missing_ok=True)
+                return
 
             try:
-                os.kill(pid, 0)  # Still exists?
-                os.kill(pid, signal.SIGKILL)
-                logger.info(f"Force killed orphaned vfkit process {pid}")
+                pid = int(pid_str)
+            except ValueError:
+                logger.warning(f"Invalid PID in file {pid_file}: {pid_str}")
+                pid_file.unlink(missing_ok=True)
+                return
+
+            if pid <= 0:
+                logger.warning(f"Invalid PID value: {pid}")
+                pid_file.unlink(missing_ok=True)
+                return
+
+            # Quick check if process exists
+            try:
+                os.kill(pid, 0)  # Process exists
+                logger.info(f"Found orphaned vfkit process with PID {pid}")
+
+                # Kill gracefully then forcefully if needed
+                os.kill(pid, signal.SIGTERM)
+                await asyncio.sleep(0.5)  # Non-blocking sleep
+
+                try:
+                    os.kill(pid, 0)  # Still exists?
+                    os.kill(pid, signal.SIGKILL)
+                    logger.info(f"Force killed orphaned vfkit process {pid}")
+                except ProcessLookupError:
+                    logger.info(f"Orphaned vfkit process {pid} terminated gracefully")
+
             except ProcessLookupError:
-                logger.info(f"Orphaned vfkit process {pid} terminated gracefully")
+                # Process doesn't exist, just clean up the PID file
+                logger.debug(f"Orphaned vfkit process {pid} no longer exists")
 
-        except ProcessLookupError:
-            # Process doesn't exist, just clean up the PID file
-            logger.debug(f"Orphaned vfkit process {pid} no longer exists")
+            pid_file.unlink(missing_ok=True)
+            logger.info("Cleaned up orphaned vfkit process")
 
-        pid_file.unlink()
-        logger.info("Cleaned up orphaned vfkit process")
-
-    except (ValueError, OSError) as e:
+    except (FileNotFoundError, BlockingIOError):
+        return
+    except Exception as e:
         logger.error(f"Error cleaning up orphaned vfkit process: {e}")
-        try:
-            pid_file.unlink()
-        except Exception:
-            pass
+
+
+def cleanup_orphaned_vfkit_processes_sync(working_dir: Path) -> None:
+    """Synchronous wrapper for atexit compatibility."""
+    try:
+        # Try to get current event loop
+        loop = asyncio.get_running_loop()
+        # If we're in an async context, schedule async
+        loop.create_task(cleanup_orphaned_vfkit_processes(working_dir))
+    except RuntimeError:
+        # No event loop, use synchronous
+        _cleanup_orphaned_vfkit_processes_sync(working_dir)
+
+
+def _cleanup_orphaned_vfkit_processes_sync(working_dir: Path) -> None:
+    """Synchronous implementation for atexit."""
+    pid_file = working_dir / "vfkit.pid"
+
+    try:
+        with open(pid_file, "r") as f:
+            fcntl.flock(f.fileno(), fcntl.LOCK_SH | fcntl.LOCK_NB)
+            pid_str = f.read().strip()
+
+            if not pid_str:
+                pid_file.unlink(missing_ok=True)
+                return
+
+            try:
+                pid = int(pid_str)
+            except ValueError:
+                logger.warning(f"Invalid PID in file {pid_file}: {pid_str}")
+                pid_file.unlink(missing_ok=True)
+                return
+
+            if pid <= 0:
+                logger.warning(f"Invalid PID value: {pid}")
+                pid_file.unlink(missing_ok=True)
+                return
+
+            # Quick check if process exists
+            try:
+                os.kill(pid, 0)  # Process exists
+                logger.info(f"Found orphaned vfkit process with PID {pid}")
+
+                # Kill gracefully then forcefully if needed
+                os.kill(pid, signal.SIGTERM)
+                time.sleep(0.5)  # Synchronous sleep for atexit
+
+                try:
+                    os.kill(pid, 0)  # Still exists?
+                    os.kill(pid, signal.SIGKILL)
+                    logger.info(f"Force killed orphaned vfkit process {pid}")
+                except ProcessLookupError:
+                    logger.info(f"Orphaned vfkit process {pid} terminated gracefully")
+
+            except ProcessLookupError:
+                # Process doesn't exist, just clean up the PID file
+                logger.debug(f"Orphaned vfkit process {pid} no longer exists")
+
+            pid_file.unlink(missing_ok=True)
+            logger.info("Cleaned up orphaned vfkit process")
+
+    except (FileNotFoundError, BlockingIOError):
+        # File doesn't exist or is locked by active process
+        return
+    except Exception as e:
+        logger.error(f"Error cleaning up orphaned vfkit process: {e}")
 
 
 class VMProcess:
@@ -106,6 +202,15 @@ class VMProcess:
 
         # Process management
         self.pid_file = self.working_dir / "vfkit.pid"
+
+        # Initialize vfkit API client
+        self.api_client = VfkitAPIClient(
+            api_port=self._vfkit_api_port,
+            is_running_check=self.is_running,
+        )
+
+        # Initialize circuit breaker for API operations
+        self._api_circuit_breaker = CircuitBreaker(failure_threshold=3, timeout=10.0)
 
         # Setup cleanup handler
         atexit.register(self._cleanup_on_exit)
@@ -153,29 +258,82 @@ class VMProcess:
 
         return cmd
 
-    async def _vfkit_api_request(
-        self, endpoint: str = "/vm/state", method: str = "POST", data: dict = {}
-    ) -> dict | None:
-        """Make a request to the VM's restful API."""
-        if not self.is_running:
-            raise VMRuntimeError("Cannot make API request: VM is not running")
+    async def _get_state_info(self, max_retries: int = 3) -> Optional[dict]:
+        """Get VM state via vfkit API with retry logic for transient failures."""
+        for attempt in range(max_retries):
+            try:
+                return await self.api_client.get("/vm/state")
+            except VMRuntimeError as e:
+                if attempt < max_retries - 1:
+                    # Exponential backoff with jitter
+                    delay = (0.1 * (2**attempt)) + random.uniform(0, 0.05)
+                    logger.debug(f"VM state query failed, retrying in {delay:.2f}s: {e}")
+                    await asyncio.sleep(delay)
+                else:
+                    logger.error(f"VM state query failed after {max_retries} attempts: {e}")
 
-        url = f"http://localhost:{self._vfkit_api_port}{endpoint}"
+        return None
 
+    async def _get_state_info_with_breaker(self) -> Optional[dict]:
+        """Get VM state with circuit breaker protection."""
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.request(method, url, json=data)
-                response.raise_for_status()
-                return response.json() or None
+            return await self._api_circuit_breaker.call(self._get_state_info_raw)
+        except VMRuntimeError:
+            logger.warning("Circuit breaker prevented VM state query")
+            return None
 
-        except httpx.HTTPError as e:
-            raise VMRuntimeError(f"vfkit API request failed: {e}")
-        except Exception as e:
-            raise VMRuntimeError(f"Unexpected error in vfkit API request: {e}")
+    async def _get_state_info_raw(self) -> Optional[dict]:
+        """Raw VM state query with no retry logic."""
+        return await self.api_client.get("/vm/state")
 
-    async def _get_vm_state(self) -> dict:
-        """Get the current state of the VM via vfkit API."""
-        return await self._vfkit_api_request(method="GET") or {}
+    async def get_current_state(self) -> str:
+        """Get current VM process state with validation and recovery.
+
+        Returns:
+            str: One of VMProcessState constants
+        """
+        if not self.is_running:
+            return VMProcessState.STOPPED
+
+        # Try to get state with circuit breaker
+        state_info = await self._get_state_info_with_breaker()
+
+        if not state_info:
+            # If API is unavailable, check process status
+            if self.vm_process and self.vm_process.returncode is None:
+                logger.warning("VM API unavailable but process running")
+                return VMProcessState.UNKNOWN
+            else:
+                return VMProcessState.STOPPED
+
+        if "state" not in state_info:
+            logger.warning("Invalid VM state response")
+            return VMProcessState.UNKNOWN
+
+        vm_state = state_info.get("state")
+        if vm_state == VirtualMachineState.RUNNING:
+            return VMProcessState.RUNNING
+        elif vm_state == VirtualMachineState.PAUSED:
+            return VMProcessState.PAUSED
+        elif vm_state == VirtualMachineState.STOPPED:
+            return VMProcessState.STOPPED
+        else:
+            logger.debug(f"Unhandled VM state returned: {vm_state}")
+            return VMProcessState.UNKNOWN
+
+    async def can_pause(self) -> bool:
+        """Check if VM can be paused."""
+        if not self.is_running:
+            return False
+        vm_state = await self._get_state_info()
+        return vm_state.get("canPause", False) if vm_state else False
+
+    async def can_resume(self) -> bool:
+        """Check if VM can be resumed."""
+        if not self.is_running:
+            return False
+        vm_state = await self._get_state_info()
+        return vm_state.get("canResume", False) if vm_state else False
 
     async def _start_vm_process(self) -> None:
         """Start the VM process."""
@@ -222,8 +380,8 @@ class VMProcess:
 
         timeout = self.config.ip_discovery_timeout
         start_time = asyncio.get_event_loop().time()
-        interval = 0.1  # Start with 100ms instead of 1s for faster discovery
-        max_interval = 2.0  # Reduced max interval from 5s to 2s
+        interval = 0.1  # Start with 100ms
+        max_interval = 2.0  # Cap at 2s
 
         while (asyncio.get_event_loop().time() - start_time) < timeout:
             # Check for shutdown signals
@@ -293,24 +451,69 @@ class VMProcess:
             self._cleanup_vm_state()
 
     def _write_pid_file(self, pid: int) -> None:
-        """Write process PID to file for external cleanup."""
+        """Write process PID to file atomically."""
         try:
-            self.pid_file.write_text(str(pid))
+            # Write to temporary file first
+            pid_dir = self.pid_file.parent
+            with tempfile.NamedTemporaryFile(
+                mode="w", dir=pid_dir, prefix=f"{self.pid_file.name}.tmp.", delete=False
+            ) as tmp_file:
+                tmp_file.write(str(pid))
+                tmp_file.flush()
+                os.fsync(tmp_file.fileno())
+                tmp_path = tmp_file.name
+
+            # Atomic move to final location
+            os.rename(tmp_path, self.pid_file)
             logger.debug(f"Wrote PID {pid} to {self.pid_file}")
+
         except Exception as e:
             logger.error(f"Error writing PID file: {e}")
+            # Clean up temporary file if it exists
+            try:
+                if "tmp_path" in locals():
+                    os.unlink(tmp_path)
+            except Exception:
+                pass
+
+    def _validate_pid_file(self) -> bool:
+        """Validate PID file format and content."""
+        try:
+            if not self.pid_file.exists():
+                return False
+
+            content = self.pid_file.read_text().strip()
+            if not content:
+                return False
+
+            pid = int(content)
+            if pid <= 0:
+                return False
+
+            # Check if process exists
+            try:
+                os.kill(pid, 0)
+                return True
+            except ProcessLookupError:
+                # Process doesn't exist, remove stale PID file
+                self._cleanup_pid_file()
+                return False
+
+        except (ValueError, OSError) as e:
+            logger.warning(f"Invalid PID file {self.pid_file}: {e}")
+            self._cleanup_pid_file()
+            return False
 
     def _cleanup_pid_file(self) -> None:
         """Remove PID file."""
         try:
-            if self.pid_file.exists():
-                self.pid_file.unlink()
-                logger.debug(f"Removed PID file {self.pid_file}")
+            self.pid_file.unlink(missing_ok=True)
+            logger.debug(f"Removed PID file {self.pid_file}")
         except Exception as e:
             logger.error(f"Error removing PID file: {e}")
 
     def _cleanup_on_exit(self) -> None:
-        """Cleanup handler called by atexit."""
+        """Cleanup handler called by atexit - must be synchronous."""
         logger.debug("atexit cleanup handler called")
         try:
             self._cleanup_process_sync()
@@ -344,15 +547,20 @@ class VMProcess:
 
     def _cleanup_vm_state(self) -> None:
         """Clean up VM state after shutdown."""
+        # Schedule API client cleanup
+        if self.api_client:
+            asyncio.create_task(self.api_client.close())
+
         # Cancel output task
         if self._output_task and not self._output_task.done():
             self._output_task.cancel()
 
-        # Reset VM state
+        # Reset state variables
         self.vm_process = None
         self._ip_address = None
         self._output_task = None
 
+        logger.debug("VM state cleaned up")
         # Cleanup PID file
         self._cleanup_pid_file()
 
@@ -416,6 +624,9 @@ class VMProcess:
         logger.info("Stopping VM...")
         self._shutdown_requested = True
 
+        # Close API client first
+        await self.api_client.close()
+
         # Cancel output task
         if self._output_task and not self._output_task.done():
             self._output_task.cancel()
@@ -444,40 +655,132 @@ class VMProcess:
         self._cleanup_vm_state()
 
     async def pause(self, timeout: int = 30) -> None:
-        """Pause the VM"""
+        """Pause the VM via the vfkit API with timeout."""
         logger.info("Pausing the VM...")
-        if self.vm_process and self.vm_process.returncode is None:
-            vm_state = await self._get_vm_state()
-            can_pause = vm_state.get("canPause", False)
 
-            if not can_pause:
-                logger.warning("VM cannot be paused, attempting to stop instead...")
-                await self.stop(timeout)
-                return
-            else:
-                try:
-                    await self._vfkit_api_request(data={"state": "Pause"})
-                    logger.info("VM paused")
-                except Exception as e:
-                    logger.error(f"Error pausing VM: {e}")
+        if not self.is_running:
+            raise VMRuntimeError("Cannot pause: VM is not running")
 
-    async def resume(self) -> None:
-        """Pause the VM"""
+        # Check if VM can be paused with timeout
+        can_pause = await with_timeout(self.can_pause, 5.0, "Can pause check")
+
+        if not can_pause:
+            raise VMRuntimeError("VM cannot be paused in current state")
+
+        try:
+            data = {"state": "Pause"}
+            await with_timeout(
+                lambda: self.api_client.post("/vm/state", data),
+                timeout=timeout,
+                operation_name="VM pause",
+            )
+            logger.info("VM paused successfully")
+
+        except VMRuntimeError:
+            raise
+        except Exception as e:
+            raise VMRuntimeError(f"Error pausing VM: {e}")
+
+    async def resume(self, timeout: int = 30) -> None:
+        """Resume the VM via the vfkit API with timeout."""
         logger.info("Resuming the VM...")
-        if self.vm_process and self.vm_process.returncode is None:
-            vm_state = await self._get_vm_state()
-            can_resume = vm_state.get("canResume", False)
 
-            if not can_resume:
-                logger.warning("VM cannot resume, attempting to start instead...")
-                await self.start()
-                return
+        if not self.is_running:
+            raise VMRuntimeError("Cannot resume: VM is not running")
+
+        # Check if VM can be resumed with timeout
+        can_resume = await with_timeout(self.can_resume, 5.0, "Can resume check")
+
+        if not can_resume:
+            raise VMRuntimeError("VM cannot be resumed in current state")
+
+        try:
+            data = {"state": "Resume"}
+            await with_timeout(
+                lambda: self.api_client.post("/vm/state", data),
+                timeout=timeout,
+                operation_name="VM resume",
+            )
+            logger.info("VM resumed successfully")
+
+        except VMRuntimeError:
+            raise
+        except Exception as e:
+            raise VMRuntimeError(f"Error resuming VM: {e}")
+
+    async def safe_pause_or_stop(self, timeout: int = 30) -> bool:
+        """Attempt to pause VM with progressive timeout, fall back to stop.
+
+        Args:
+            timeout: Total timeout for the operation
+
+        Returns:
+            bool: True if paused, False if stopped
+        """
+        if not self.is_running:
+            logger.debug("VM not running, nothing to pause or stop")
+            return False
+
+        # Try to pause with shorter timeout first
+        try:
+            pause_timeout = min(timeout // 2, 15)  # Half timeout or 15s max
+            if await with_timeout(self.can_pause, 3.0, "Can pause check"):
+                await self.pause(pause_timeout)
+                return True
             else:
-                try:
-                    await self._vfkit_api_request(data={"state": "Resume"})
-                    logger.info("VM resumed")
-                except Exception as e:
-                    logger.error(f"Error resuming VM: {e}")
+                logger.debug("VM cannot be paused, falling back to stop")
+
+        except VMRuntimeError as e:
+            logger.warning(f"Failed to pause VM: {e}, falling back to stop")
+
+        # Fall back to stop with remaining timeout
+        stop_timeout = max(timeout - pause_timeout if "pause_timeout" in locals() else timeout, 10)
+        await self.stop(stop_timeout)
+        return False
+
+    async def safe_resume_or_start(self) -> str:
+        """Attempt to resume VM, fall back to start if resume fails.
+
+        Returns:
+            str: IP address of the VM
+        """
+        current_state = await self.get_current_state()
+
+        # If VM is already running, return IP
+        if current_state == VMProcessState.RUNNING:
+            if self._ip_address:
+                return self._ip_address
+            else:
+                logger.debug("VM running but no cached IP found, rediscovering...")
+                ip = await self._discover_ip_address()
+                return ip
+
+        # If VM is paused, try to resume
+        if current_state == VMProcessState.PAUSED:
+            try:
+                if await self.can_resume():
+                    logger.info("Attempting to resume paused VM instead of starting...")
+                    await self.resume()
+
+                    # VM should now be running, return cached IP or rediscover
+                    if self._ip_address:
+                        logger.info(f"Successfully resumed VM at {self._ip_address}")
+                        return self._ip_address
+                    else:
+                        # IP might have changed, rediscover
+                        logger.debug("VM resumed but IP not cached, rediscovering...")
+                        ip = await self._discover_ip_address()
+                        return ip
+                else:
+                    logger.debug("VM cannot be resumed, falling back to start")
+            except Exception as e:
+                logger.warning(f"Failed to resume VM, falling back to start: {e}")
+                # Ensure VM is properly stopped before starting
+                await self.stop()
+
+        # Fall back to normal start
+        logger.info("Starting VM from stopped state...")
+        return await self.start()
 
     @property
     def is_running(self) -> bool:

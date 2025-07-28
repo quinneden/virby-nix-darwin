@@ -3,12 +3,12 @@
 import asyncio
 import logging
 import os
-import signal
 import stat
 import sys
 
 from .config import VMConfig
 from .runner import VirbyVMRunner
+from .signal_manager import SignalManager
 from .vm_process import cleanup_orphaned_vfkit_processes
 
 
@@ -22,30 +22,15 @@ def setup_logging(debug: bool = False) -> None:
     )
 
 
-def setup_early_signal_handling() -> None:
-    """Setup early signal handling before main application logic."""
-
-    def early_signal_handler(signum, frame):
-        logging.info(f"Early signal handler: received signal {signum}")
-        # Set a global flag that can be checked by other parts of the application
-        os.environ["VIRBY_SHUTDOWN_REQUESTED"] = "1"
-
-    # Install early handlers for critical signals
-    signal.signal(signal.SIGTERM, early_signal_handler)
-    signal.signal(signal.SIGINT, early_signal_handler)
-
-
 def debug_startup_environment():
     """Debug environment and file descriptors at startup."""
     logger = logging.getLogger(__name__)
 
-    # Only do expensive debugging if explicitly requested
     if not logger.isEnabledFor(logging.DEBUG):
         return
 
     logger.debug("=== STARTUP DEBUG ===")
 
-    # Log key environment variables efficiently
     env_vars = [
         "VIRBY_VM_CONFIG_FILE",
         "VIRBY_WORKING_DIRECTORY",
@@ -62,7 +47,7 @@ def debug_startup_environment():
 
     # Only check file descriptors if really needed and limit to first 5 FDs
     socket_fds = []
-    for fd in range(5):  # Reduced from 10 to 5
+    for fd in range(5):
         try:
             fd_stat = os.fstat(fd)
             if stat.S_ISSOCK(fd_stat.st_mode):
@@ -78,10 +63,9 @@ def debug_startup_environment():
 
 async def main() -> int:
     """Main CLI entry point."""
-    try:
-        # Setup early signal handling before anything else
-        setup_early_signal_handling()
+    signal_manager = SignalManager()
 
+    try:
         debug_startup_environment()
 
         config_file_env = os.getenv("VIRBY_VM_CONFIG_FILE")
@@ -89,13 +73,16 @@ async def main() -> int:
 
         setup_logging(config.debug_enabled)
 
+        # Setup signal handling once
+        signal_manager.setup_signal_handlers()
+
         # Clean up any orphaned processes from previous runs
         try:
-            cleanup_orphaned_vfkit_processes(config.working_directory)
+            await cleanup_orphaned_vfkit_processes(config.working_directory)
         except Exception as e:
             logging.warning(f"Error during orphan cleanup: {e}")
 
-        runner = VirbyVMRunner(config)
+        runner = VirbyVMRunner(config, signal_manager)
         await runner.run()
 
         return 0
@@ -106,6 +93,8 @@ async def main() -> int:
     except Exception as e:
         logging.error(f"Fatal error: {e}")
         return 1
+    finally:
+        signal_manager.cleanup()
 
 
 def cli_main() -> None:

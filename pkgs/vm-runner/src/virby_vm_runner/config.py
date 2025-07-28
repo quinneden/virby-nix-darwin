@@ -100,7 +100,20 @@ class VMConfig:
 
         # Store other config values
         self._ip_discovery_timeout = self._config.get("ip_discovery_timeout", 60)
-        self._ssh_ready_timeout = self._config.get("ssh_ready_timeout", 60)
+        self._ssh_ready_timeout = self._config.get("ssh_ready_timeout", 30)
+
+        # VM operation timeouts
+        self._vm_pause_timeout = self._config.get("vm_pause_timeout", 30)
+        self._vm_resume_timeout = self._config.get("vm_resume_timeout", 30)
+        self._vm_stop_timeout = self._config.get("vm_stop_timeout", 30)
+
+        for timeout_name, timeout_val in [
+            ("vm_pause_timeout", self._vm_pause_timeout),
+            ("vm_resume_timeout", self._vm_resume_timeout),
+            ("vm_stop_timeout", self._vm_stop_timeout),
+        ]:
+            if not isinstance(timeout_val, int) or timeout_val < 1:
+                raise VMConfigurationError(f"Invalid {timeout_name}: {timeout_val}")
 
     @property
     def cores(self) -> int:
@@ -157,6 +170,21 @@ class VMConfig:
     def ttl(self) -> int:
         """Get TTL (time to live) in seconds for on-demand VM shutdown."""
         return int(self._ttl)
+
+    @property
+    def vm_pause_timeout(self) -> int:
+        """Get VM pause timeout in seconds."""
+        return self._vm_pause_timeout
+
+    @property
+    def vm_resume_timeout(self) -> int:
+        """Get VM resume timeout in seconds."""
+        return self._vm_resume_timeout
+
+    @property
+    def vm_stop_timeout(self) -> int:
+        """Get VM stop timeout in seconds."""
+        return self._vm_stop_timeout
 
     def __repr__(self) -> str:
         """String representation of configuration."""

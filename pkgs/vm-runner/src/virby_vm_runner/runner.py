@@ -2,14 +2,13 @@
 
 import asyncio
 import logging
-import os
-import signal
 import socket
 import sys
 import time
 
 from .config import VMConfig
 from .exceptions import VMStartupError
+from .signal_manager import SignalManager
 from .socket_activation import SocketActivation
 from .vm_process import VMProcess
 
@@ -17,10 +16,11 @@ logger = logging.getLogger(__name__)
 
 
 class VirbyVMRunner:
-    """VM runner that integrates with the nix-darwin module."""
+    """VM runner that integrates with the Virby Nix-darwin module."""
 
-    def __init__(self, config: VMConfig):
+    def __init__(self, config: VMConfig, signal_manager: SignalManager):
         self.config = config
+        self.signal_manager = signal_manager
 
         # Initialize components
         self.vm_process = VMProcess(config, config.working_directory)
@@ -31,6 +31,7 @@ class VirbyVMRunner:
         self._activation_socket: socket.socket | None = None
         self._active_connections: int = 0
         self._last_connection_time: int | float = 0
+        self._shutdown_timer: asyncio.Task | None = None
 
     async def _handle_activation_connections(self) -> None:
         """Handle incoming connections on the activation socket."""
@@ -59,8 +60,7 @@ class VirbyVMRunner:
     async def _ensure_vm_ready(self) -> None:
         """Ensure VM is started and ready for connections."""
         # Check for shutdown signal
-        if os.environ.get("VIRBY_SHUTDOWN_REQUESTED"):
-            os.environ.pop("VIRBY_SHUTDOWN_REQUESTED", None)
+        if self.signal_manager.is_shutdown_requested():
             raise VMStartupError("Shutdown requested, not starting VM")
 
         # Also check VM process shutdown flag if it exists
@@ -68,18 +68,15 @@ class VirbyVMRunner:
             raise VMStartupError("VM shutdown already requested")
 
         vm_running = self.vm_process.is_running
-
-        if not vm_running:
-            if self.config.on_demand_enabled:
-                logger.info("Starting VM for on-demand connection")
-            else:
-                logger.info("Starting VM for always-on connection")
-
-            # Start VM and get IP address
-            ip = await self.vm_process.start()
-            logger.info(f"VM ready at {ip}")
+        if self.config.on_demand_enabled:
+            can_resume = self.vm_process.can_resume()
+            if can_resume or not vm_running:
+                ip = await self.vm_process.safe_resume_or_start()
+                logger.info(f"VM ready (ip: {ip})")
         else:
-            logger.debug(f"VM running at {self.vm_process.ip_address}")
+            if not vm_running:
+                ip = await self.vm_process.start()
+                logger.info(f"VM ready (ip: {ip})")
 
     async def _proxy_connection(
         self, client_reader: asyncio.StreamReader, client_writer: asyncio.StreamWriter
@@ -88,11 +85,15 @@ class VirbyVMRunner:
         self._active_connections += 1
         self._last_connection_time = time.time()
 
+        # Reset shutdown timer if it exists
+        if self._shutdown_timer and not self._shutdown_timer.done():
+            self._shutdown_timer.cancel()
+            self._shutdown_timer = None
+
         try:
-            # Check for early shutdown signal
-            if os.environ.get("VIRBY_SHUTDOWN_REQUESTED"):
-                logger.info("Early shutdown requested, rejecting connection")
-                os.environ.pop("VIRBY_SHUTDOWN_REQUESTED", None)
+            # Check for shutdown signal
+            if self.signal_manager.is_shutdown_requested():
+                logger.info("Shutdown requested, rejecting connection")
                 return
 
             # Check VM process shutdown state
@@ -149,30 +150,38 @@ class VirbyVMRunner:
             except Exception:
                 pass
 
-            # In on-demand mode, schedule shutdown check after connection ends
+            # In on-demand mode, start shutdown timer after connection ends
             if self.config.on_demand_enabled and self._active_connections == 0:
-                asyncio.create_task(self._schedule_shutdown_check())
+                self._shutdown_timer = asyncio.create_task(self._schedule_shutdown_check())
 
     async def _schedule_shutdown_check(self) -> None:
         """Schedule a shutdown check after TTL expires in on-demand mode."""
         # Get TTL from config
-        ttl_seconds = self.config.ttl
+        try:
+            ttl_seconds = self.config.ttl
 
-        logger.debug(f"Scheduling shutdown check in {ttl_seconds} seconds")
-        await asyncio.sleep(ttl_seconds)
+            logger.debug(f"Scheduling shutdown check in {ttl_seconds} seconds")
+            await asyncio.sleep(ttl_seconds)
 
-        # Check if we should shutdown
-        if self._active_connections == 0:
-            time_since_last_connection = time.time() - self._last_connection_time
-            if time_since_last_connection >= ttl_seconds:
+            # Check if we should shutdown
+            if self._active_connections == 0:
                 logger.info("TTL expired with no active connections, shutting down VM")
-                await self.stop()
+                # In on-demand mode, try pause before stop
+                if self.config.on_demand_enabled:
+                    was_paused = await self.vm_process.safe_pause_or_stop()
+                    if was_paused:
+                        logger.info("VM paused")
+                    else:
+                        logger.info("VM stopped")
+                else:
+                    await self.stop()
             else:
-                logger.debug("TTL expired but recent connection activity, not shutting down")
-        else:
-            logger.debug(
-                f"TTL expired but {self._active_connections} active connections, not shutting down"
-            )
+                logger.debug(
+                    f"TTL expired but there are {self._active_connections} active connections, not shutting down"
+                )
+        except asyncio.CancelledError:
+            logger.debug("Shutdown timer cancelled due to new connection")
+            raise
 
     async def start(self) -> None:
         """Start the VM and wait for it to be ready."""
@@ -181,6 +190,11 @@ class VirbyVMRunner:
     async def stop(self, timeout: int = 30) -> None:
         """Stop the VM gracefully."""
         self._shutdown_requested = True
+
+        if self._shutdown_timer and not self._shutdown_timer.done():
+            self._shutdown_timer.cancel()
+            self._shutdown_timer = None
+
         await self.vm_process.stop(timeout)
 
     async def resume(self) -> None:
@@ -193,20 +207,9 @@ class VirbyVMRunner:
 
     async def run(self) -> None:
         """Main run loop."""
-        shutdown_event = asyncio.Event()
-
-        def signal_handler(signum, frame):
-            logger.info(f"Received signal {signum} in main runner")
-            shutdown_event.set()
-
-        # Set up signal handlers (these will override the early ones)
-        signal.signal(signal.SIGINT, signal_handler)
-        signal.signal(signal.SIGTERM, signal_handler)
-
-        # Check if early shutdown was requested
-        if os.environ.get("VIRBY_SHUTDOWN_REQUESTED"):
-            logger.info("Early shutdown detected, exiting immediately")
-            os.environ.pop("VIRBY_SHUTDOWN_REQUESTED", None)
+        # Check if shutdown was already requested
+        if self.signal_manager.is_shutdown_requested():
+            logger.info("Shutdown already requested, exiting immediately")
             return
 
         try:
@@ -220,20 +223,13 @@ class VirbyVMRunner:
             # Start connection handling
             proxy_task = asyncio.create_task(self._handle_activation_connections())
 
-            # Add periodic check for VM shutdown requests and environment signals
+            # Add periodic check for VM shutdown requests
             async def monitor_shutdown_signals():
-                while not shutdown_event.is_set():
-                    # Check for environment shutdown signal
-                    if os.environ.get("VIRBY_SHUTDOWN_REQUESTED"):
-                        logger.info("Environment shutdown signal detected")
-                        os.environ.pop("VIRBY_SHUTDOWN_REQUESTED", None)
-                        shutdown_event.set()
-                        break
-
+                while not self.signal_manager.is_shutdown_requested():
                     # Check if VM process has requested shutdown
                     if hasattr(self, "vm_process") and self.vm_process._shutdown_requested:
                         logger.info("VM process requested shutdown")
-                        shutdown_event.set()
+                        self.signal_manager.request_shutdown()
                         break
 
                     await asyncio.sleep(1)  # Check every second
@@ -243,7 +239,7 @@ class VirbyVMRunner:
             # Wait for shutdown signal or tasks to complete
             await asyncio.wait(
                 [
-                    asyncio.create_task(shutdown_event.wait()),
+                    asyncio.create_task(self.signal_manager.shutdown_event.wait()),
                     proxy_task,
                     monitor_task,
                 ],

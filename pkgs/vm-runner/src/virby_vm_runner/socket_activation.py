@@ -6,10 +6,29 @@ import logging
 import os
 import socket
 import stat
+from contextlib import asynccontextmanager
 
 from .exceptions import VMStartupError
 
 logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def managed_socket(fd: int, family: int, type: int):
+    """Context manager for socket file descriptors."""
+    sock = None
+    try:
+        sock = socket.fromfd(fd, family, type)
+        yield sock
+    except Exception as e:
+        logger.debug(f"Error with socket FD {fd}: {e}")
+        raise
+    finally:
+        if sock:
+            try:
+                sock.close()
+            except Exception as e:
+                logger.debug(f"Error closing socket FD {fd}: {e}")
 
 
 class SocketActivation:
@@ -30,6 +49,11 @@ class SocketActivation:
         try:
             # Load the System library which contains launch_activate_socket
             libsystem = ctypes.CDLL(ctypes.util.find_library("System"))
+
+            # Verify function exists
+            if not hasattr(libsystem, "launch_activate_socket"):
+                logger.debug("launch_activate_socket not available")
+                return []
 
             # Define the function signature
             # int launch_activate_socket(const char *name, int **fds, size_t *cnt);
@@ -65,43 +89,48 @@ class SocketActivation:
             logger.debug(f"launch_activate_socket returned {count.value} file descriptors: {fds}")
             return fds
 
-        except Exception as e:
-            logger.debug(f"Failed to call launch_activate_socket: {e}")
+        except (OSError, AttributeError) as e:
+            logger.debug(f"Failed to load launch_activate_socket: {e}")
             return []
 
     def get_activation_socket(self) -> socket.socket:
         """Get the socket passed by launchd for activation."""
         logger.debug("Attempting to find activation socket...")
 
-        # First try the proper launchd API
+        # Try proper launchd API first
         socket_fds = self._call_launch_activate_socket("Listener")
 
         if socket_fds:
-            logger.debug(f"Got {len(socket_fds)} file descriptors from launch_activate_socket")
-            for fd in socket_fds:
-                try:
-                    test_sock = socket.fromfd(fd, socket.AF_INET, socket.SOCK_STREAM)
-                    sock_name = test_sock.getsockname()
-                    logger.info(f"Found launchd socket on FD {fd}, bound to {sock_name}")
+            return self._process_launchd_sockets(socket_fds)
 
-                    # Check if this matches our expected port
-                    if sock_name[1] == self.port:
-                        logger.info(f"Using matching socket on FD {fd}")
-                        return test_sock
-                    else:
-                        logger.warning(
-                            f"Socket port {sock_name[1]} doesn't match expected {self.port}, using anyway"
-                        )
-                        return test_sock
+        # Limited fallback scanning
+        return self._fallback_socket_scan()
 
-                except Exception as e:
-                    logger.debug(f"Failed to use FD {fd} from launch_activate_socket: {e}")
-                    try:
-                        test_sock.close()
-                    except Exception:
-                        pass
+    def _process_launchd_sockets(self, socket_fds: list[int]) -> socket.socket:
+        """Process sockets from launchd with proper cleanup."""
+        for fd in socket_fds:
+            try:
+                test_sock = socket.fromfd(fd, socket.AF_INET, socket.SOCK_STREAM)
+                sock_name = test_sock.getsockname()
+                logger.info(f"Found launchd socket on FD {fd}, bound to {sock_name}")
 
-        # Fallback: scan file descriptors manually
+                if sock_name[1] == self.port:
+                    # Duplicate the socket before returning it
+                    dup_fd = os.dup(fd)
+                    final_sock = socket.fromfd(dup_fd, socket.AF_INET, socket.SOCK_STREAM)
+                    test_sock.close()
+                    return final_sock
+                else:
+                    test_sock.close()
+
+            except Exception as e:
+                logger.debug(f"Failed to process FD {fd}: {e}")
+                continue
+
+        raise VMStartupError("No matching socket found in launchd file descriptors")
+
+    def _fallback_socket_scan(self) -> socket.socket:
+        """Limited fallback file descriptor scanning."""
         logger.debug("Falling back to manual file descriptor scanning...")
 
         # Check environment variables for additional clues
@@ -110,61 +139,36 @@ class SocketActivation:
             if value:
                 logger.debug(f"Found env var {env_var}={value}")
 
-        # Scan all available file descriptors to find listening sockets
-        found_sockets = []
-
-        for fd in range(256):  # Check up to FD 255
+        # Scan standard range for launchd sockets (typically 3-10)
+        for fd in range(3, 11):
             try:
                 fd_stat = os.fstat(fd)
-                if stat.S_ISSOCK(fd_stat.st_mode):
+                if not stat.S_ISSOCK(fd_stat.st_mode):
+                    continue
+
+                test_sock = socket.fromfd(fd, socket.AF_INET, socket.SOCK_STREAM)
+                try:
+                    sock_name = test_sock.getsockname()
+                    logger.debug(f"FD {fd}: Socket bound to {sock_name}")
+
+                    if sock_name[1] == self.port:
+                        logger.info(f"Found matching socket on FD {fd}, bound to {sock_name}")
+                        # Duplicate socket before returning
+                        dup_fd = os.dup(fd)
+                        final_sock = socket.fromfd(dup_fd, socket.AF_INET, socket.SOCK_STREAM)
+                        test_sock.close()
+                        return final_sock
+                    else:
+                        test_sock.close()
+
+                except Exception as e:
+                    logger.debug(f"Failed to get socket info for FD {fd}: {e}")
                     try:
-                        # Try to create socket object from FD
-                        test_sock = socket.fromfd(fd, socket.AF_INET, socket.SOCK_STREAM)
-                        try:
-                            sock_name = test_sock.getsockname()
+                        test_sock.close()
+                    except Exception:
+                        pass
 
-                            # Since SO_ACCEPTCONN is not available on macOS, assume all sockets
-                            # could be listening sockets and check if they match our port
-                            try:
-                                logger.debug(f"FD {fd}: Socket bound to {sock_name}")
-                            except Exception as log_e:
-                                logger.debug(f"FD {fd}: Socket (failed to log address: {log_e})")
-                            if sock_name[1] == self.port:
-                                logger.info(
-                                    f"Found matching socket on FD {fd}, bound to {sock_name}"
-                                )
-                                return test_sock
-                            else:
-                                found_sockets.append((fd, sock_name, "available"))
-                                test_sock.close()
-
-                        except Exception as e:
-                            logger.debug(f"FD {fd} is a socket but failed to get socket name: {e}")
-                            try:
-                                test_sock.close()
-                            except Exception:
-                                pass
-                    except Exception as e:
-                        logger.debug(f"FD {fd} is a socket but failed to create socket object: {e}")
-            except OSError:
-                # FD not available or not accessible
-                continue
-            except Exception as e:
-                logger.debug(f"Unexpected error checking FD {fd}: {e}")
+            except (OSError, Exception):
                 continue
 
-        if found_sockets:
-            logger.debug(f"Found {len(found_sockets)} sockets:")
-            for fd, addr, state in found_sockets:
-                logger.debug(f"  FD {fd}: {addr} ({state})")
-
-            # If we found exactly one socket, use it (might be the right one)
-            if len(found_sockets) == 1:
-                fd, addr, state = found_sockets[0]
-                logger.warning(f"Using only available socket on FD {fd} bound to {addr} ({state})")
-                sock = socket.fromfd(fd, socket.AF_INET, socket.SOCK_STREAM)
-                return sock
-
-        raise VMStartupError(
-            f"Failed to find activation socket on expected port {self.port}. Found {len(found_sockets)} sockets."
-        )
+        raise VMStartupError(f"No activation socket found on port {self.port}")
