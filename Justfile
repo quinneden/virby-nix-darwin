@@ -20,7 +20,8 @@ clean:
         -name ".*_cache" -or \
         -name "__pycache__" -or \
         -name "build" -or \
-        -name "dist" \
+        -name "dist" -or \
+        -name "result" \
       ")" -exec rm -rf {} + 2>/dev/null || true
 
 format:
