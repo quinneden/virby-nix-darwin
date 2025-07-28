@@ -58,8 +58,15 @@ if [[ -n "$unpushed_commits" ]]; then
   exit 1
 fi
 
-cz bump --dry-run --major-version-zero
-version=$(cz version --project)
+pushd pkgs/vm-runner &>/dev/null || exit 1
+
+version=$(cz bump --major-version-zero --get-next)
+cz bump \
+  --major-version-zero \
+  --tag-format="$package-v\$version" \
+  --bump-message="chore($package): bump version to $version"
+
+popd &>/dev/null || exit 1
 
 read -rN1 -p "Push $package-v$version to remote? (y/N): " input
 if [[ $input != [yY] ]]; then
