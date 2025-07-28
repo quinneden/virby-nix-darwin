@@ -40,6 +40,10 @@
           type = "app";
           program = lib.getExe (pkgs.callPackage ./scripts/benchmark-vm { });
         };
+        bump-version = {
+          type = "app";
+          program = lib.getExe (pkgs.callPackage ./scripts/bump-version { });
+        };
       });
 
       devShells = perDarwinSystem (pkgs: {

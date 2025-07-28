@@ -1,12 +1,12 @@
 [project]
 name = "virby-vm-runner"
 version = "0.1.0"
-description = "Vfkit-based VM runner for Virby, with automatic IP discovery and lifecycle management"
+description = "Vfkit-based VM runner for Virby"
 requires-python = ">=3.10"
 authors = [{ name = "Quinn Edenfield", email = "quinn@qeden.dev" }]
 dependencies = [
-    "aiofiles>=24.1.0",
-    "httpx>=0.28.1",
+  "aiofiles>=24.1.0",
+  "httpx>=0.28.1",
 ]
 
 [project.scripts]
@@ -14,6 +14,7 @@ virby-vm = "virby_vm_runner.cli:cli_main"
 
 [dependency-groups]
 dev = [
+  "commitizen>=4.8.3",
   "ipython>=8.37.0",
   "isort>=5.12.0",
   "mypy>=1.0.0",
@@ -24,6 +25,14 @@ dev = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+tag_format = "vm-runner-v$version"
+ignored_tag_formats = ["latest"]
+version_scheme = "pep440"
+version_provider = "pep621"
+update_changelog_on_bump = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/virby_vm_runner"]
