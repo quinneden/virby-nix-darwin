@@ -15,6 +15,6 @@ writeShellApplication {
   ];
 
   text = ''
-    bash ${./bump-version.sh}
+    bash ${./bump-version.sh} "$@"
   '';
 }
