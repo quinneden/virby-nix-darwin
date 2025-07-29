@@ -14,6 +14,7 @@ virby-vm = "virby_vm_runner.cli:cli_main"
 
 [dependency-groups]
 dev = [
+  "basedpyright>=1.31.0",
   "commitizen>=4.8.3",
   "ipython>=8.37.0",
   "isort>=5.12.0",
@@ -25,6 +26,16 @@ dev = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.basedpyright]
+include = ["src"]
+exclude = [
+  "**/node_modules",
+  "**/__pycache__",
+]
+reportMissingImports = "none"
+reportMissingTypeStubs = false
+reportUnsupportedDunderAll = "none"
 
 [tool.commitizen]
 name = "cz_conventional_commits"
