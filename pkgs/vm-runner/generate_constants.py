@@ -3,7 +3,7 @@ import sys
 import re
 
 
-def camel_to_screaming_snake(name):
+def camel_to_screaming_snake(name: str):
     """Convert camelCase to SCREAMING_SNAKE_CASE"""
     # Insert an underscore before any uppercase letter that follows a lowercase letter
     s1 = re.sub("([a-z0-9])([A-Z])", r"\1_\2", name)
