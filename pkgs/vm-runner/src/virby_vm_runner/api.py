@@ -1,13 +1,12 @@
 """Vfkit API Client."""
 
 import asyncio
-import httpx
 import logging
 import random
-
 from functools import wraps
 from json import JSONDecodeError
-from typing import Optional
+
+import httpx
 
 from .exceptions import VMRuntimeError
 
@@ -63,7 +62,7 @@ class VfkitAPIClient:
         """
         self._vfkit_api_port = api_port
         self._is_running_check = is_running_check
-        self._client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.AsyncClient | None = None
         self._client_lock = asyncio.Lock()
 
     async def _get_client(self) -> httpx.AsyncClient:

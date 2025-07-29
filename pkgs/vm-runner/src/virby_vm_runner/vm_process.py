@@ -2,15 +2,15 @@
 
 import asyncio
 import atexit
-import logging
 import fcntl
+import logging
 import os
 import random
 import signal
 import tempfile
 import time
 from pathlib import Path
-from typing import Optional, Callable, Any
+from typing import Any, Callable
 
 from .api import VfkitAPIClient, VirtualMachineState
 from .circuit_breaker import CircuitBreaker
@@ -258,7 +258,7 @@ class VMProcess:
 
         return cmd
 
-    async def _get_state_info(self, max_retries: int = 3) -> Optional[dict]:
+    async def _get_state_info(self, max_retries: int = 3) -> dict | None:
         """Get VM state via vfkit API with retry logic for transient failures."""
         for attempt in range(max_retries):
             try:
@@ -274,7 +274,7 @@ class VMProcess:
 
         return None
 
-    async def _get_state_info_with_breaker(self) -> Optional[dict]:
+    async def _get_state_info_with_breaker(self) -> dict | None:
         """Get VM state with circuit breaker protection."""
         try:
             return await self._api_circuit_breaker.call(self._get_state_info_raw)
@@ -282,7 +282,7 @@ class VMProcess:
             logger.warning("Circuit breaker prevented VM state query")
             return None
 
-    async def _get_state_info_raw(self) -> Optional[dict]:
+    async def _get_state_info_raw(self) -> dict | None:
         """Raw VM state query with no retry logic."""
         return await self.api_client.get("/vm/state")
 

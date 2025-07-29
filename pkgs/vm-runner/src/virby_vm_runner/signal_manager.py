@@ -1,9 +1,9 @@
 """Centralized signal manager for consistent shutdown handling."""
 
 import asyncio
-import signal
 import logging
-from typing import Set, Callable
+import signal
+from typing import Callable, Set
 
 logger = logging.getLogger(__name__)
 
