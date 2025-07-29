@@ -89,12 +89,12 @@ If you prefer building the image locally, you can enable the `nix.linux-builder`
 
 | Option        | Type       | Default    | Description                                  |
 |---------------|------------|------------|----------------------------------------------|
-| `enable`      | bool       | `false`    | Enable the service                           |
-| `cores`       | int        | `8`        | CPU cores allocated to VM                    |
-| `memory`      | int/string | `6144`     | Memory in MiB or string format (e.g. "6GiB") |
-| `diskSize`    | string     | `"100GiB"` | VM disk size                                 |
-| `port`        | int        | `31222`    | SSH port for VM access                       |
-| `speedFactor` | int        | `1`        | Speed factor for Nix build machine           |
+| `enable`      | _bool_       | `false`    | Enable the service                           |
+| `cores`       | _int_        | `8`        | CPU cores allocated to VM                    |
+| `memory`      | _int_ or _string_ | `6144`     | Memory in MiB or string format (e.g. "6GiB") |
+| `diskSize`    | _string_     | `"100GiB"` | VM disk size                                 |
+| `port`        | _int_        | `31222`    | SSH port for VM access                       |
+| `speedFactor` | _int_        | `1`        | Speed factor for Nix build machine           |
 
 ### Other Settings
 
@@ -159,16 +159,17 @@ Virby integrates three components:
 
 ## Benchmarks
 
-| Test | Mean [s] | Min [s] | Max [s] | Relative |
-|:---|---:|---:|---:|---:|
-| Boot (cold start) | 9.203 ± 0.703 | 7.795 | 9.818 | 1.00 |
-| Build (`nix build --no-link --rebuild nixpkgs#hello`) | 8.136 ± 0.031 | 8.087 | 8.173 | 1.00 |
+| Test | Command | Mean&nbsp;[s] | Min&nbsp;[s] | Max&nbsp;[s] | Relative |
+|:-----|:--------|---------:|--------:|--------:|---------:|
+| Boot | `ssh virby-vm -- true` (triggers startup in on-demand mode) | 9.203&nbsp;±&nbsp;0.703 | 7.795 | 9.818 | 1.00 |
+| Build | `nix build --rebuild nixpkgs#hello` | 8.136 ±&nbsp;0.031 | 8.087 | 8.173 | 1.00 |
 
 ## Troubleshooting
 
 **Debug logging**
 ```nix
 {
+  # Enable debug logging to `/tmp/virbyd.log`
   services.virby.debug = true;
 }
 ```
@@ -181,7 +182,7 @@ tail -f /tmp/virbyd.log
 **SSH into VM**
 
 ```bash
-# Requires allowUserSsh = true
+# Requires `allowUserSsh = true`
 ssh virby-vm
 # or use sudo
 ```
