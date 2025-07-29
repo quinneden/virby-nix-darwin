@@ -23,7 +23,7 @@ let
   inherit (_lib.helpers)
     logError
     logInfo
-    parseMemoryString
+    parseMemoryMiB
     setupLogFunctions
     ;
 
@@ -224,7 +224,7 @@ in
         builtins.toJSON {
           cores = cfg.cores;
           debug = cfg.debug;
-          memory = if lib.isString cfg.memory then (parseMemoryString cfg.memory) else cfg.memory;
+          memory = parseMemoryMiB cfg.memory;
           on-demand = cfg.onDemand.enable;
           port = cfg.port;
           rosetta = cfg.rosetta;
