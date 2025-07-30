@@ -15,7 +15,7 @@ result/
 # Testing
 .env
 test/
-virby-vm-benchmark-*.md
+virby-vm-benchmark-*
 benchmark-results/
 
 # Misc
