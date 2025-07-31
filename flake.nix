@@ -53,6 +53,6 @@
         };
       });
 
-      formatter = perDarwinSystem (pkgs: pkgs.nixfmt-rfc-style);
+      formatter = perDarwinSystem (pkgs: pkgs.nixfmt-tree);
     };
 }
