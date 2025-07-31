@@ -74,9 +74,9 @@ class VMConfig:
 
         # Validate and store port
         port = self._config.get("port", None)
-        if not isinstance(port, int) or port < 1 or port > 65535:
+        if not isinstance(port, int) or port < 1024 or port > 65535:
             raise VMConfigurationError(
-                f"Invalid port: {port}. Expected: integer between 1 and 65535"
+                f"Invalid port: {port}. Expected: integer between 1024 and 65535"
             )
         self._port = port
 
