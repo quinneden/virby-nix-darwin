@@ -158,7 +158,7 @@ class VirbyVMRunner:
         """Schedule a shutdown check after TTL expires in on-demand mode."""
         # Get TTL from config
         try:
-            ttl_seconds = self.config.ttl
+            ttl_seconds = self.config.on_demand_ttl
 
             logger.debug(f"Scheduling shutdown check in {ttl_seconds} seconds")
             await asyncio.sleep(ttl_seconds)

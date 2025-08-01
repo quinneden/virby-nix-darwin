@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict
 
-from .constants import VM_USER, WORKING_DIRECTORY
+from .constants import WORKING_DIRECTORY
 from .exceptions import VMConfigurationError
 
 logger = logging.getLogger(__name__)
@@ -93,10 +93,23 @@ class VMConfig:
         self._on_demand_enabled = on_demand
 
         # Validate and store TTL
-        ttl = self._config.get("ttl", 10800)
-        if not isinstance(ttl, int) or ttl < 0:
-            raise VMConfigurationError(f"Invalid ttl: {ttl}. Expected: non-negative integer")
-        self._ttl = ttl
+        on_demand_ttl = self._config.get("ttl", 10800)
+        if not isinstance(on_demand_ttl, int) or on_demand_ttl < 0:
+            raise VMConfigurationError(
+                f"Invalid ttl: {on_demand_ttl}. Expected: non-negative integer"
+            )
+        self._on_demand_ttl = on_demand_ttl
+
+        # Validate and store shared-dirs
+        self._shared_dirs: dict[str, Path] = {}
+        shared_dirs = self._config.get("shared-dirs", {})
+        if not isinstance(shared_dirs, dict):
+            raise VMConfigurationError(f"Invalid shared-dirs: {shared_dirs}. Expected: list")
+        for tag, path in shared_dirs.items():
+            host_path = Path(path)
+            if not host_path.exists():
+                raise VMConfigurationError(f"Shared directory does not exist on host: {host_path}")
+            self._shared_dirs[tag] = host_path.resolve()
 
         # Store other config values
         self._ip_discovery_timeout = self._config.get("ip_discovery_timeout", 60)
@@ -147,11 +160,6 @@ class VMConfig:
         return Path(value)
 
     @property
-    def VM_USER(self) -> str:
-        """Get VM SSH user."""
-        return str(VM_USER)
-
-    @property
     def ip_discovery_timeout(self) -> int:
         """Get IP discovery timeout in seconds."""
         return int(self._ip_discovery_timeout)
@@ -167,9 +175,14 @@ class VMConfig:
         return bool(self._on_demand_enabled)
 
     @property
-    def ttl(self) -> int:
+    def on_demand_ttl(self) -> int:
         """Get TTL (time to live) in seconds for on-demand VM shutdown."""
-        return int(self._ttl)
+        return int(self._on_demand_ttl)
+
+    @property
+    def shared_dirs(self) -> Dict[str, Path]:
+        """Get shared directories mapping."""
+        return self._shared_dirs
 
     @property
     def vm_pause_timeout(self) -> int:
@@ -194,12 +207,15 @@ class VMConfig:
                 f"debug={self.debug_enabled}",
                 f"ip_discovery_timeout={self.ip_discovery_timeout}",
                 f"memory={self.memory}MiB",
+                f"on_demand_enabled={self._on_demand_enabled}",
+                f"on_demand_ttl={self.on_demand_ttl}",
                 f"port={self.port}",
                 f"rosetta_enabled={self.rosetta_enabled}",
+                f"shared_dirs={self.shared_dirs}",
                 f"ssh_ready_timeout={self.ssh_ready_timeout}",
-                f"on_demand_enabled={self._on_demand_enabled}",
-                f"ttl={self.ttl}",
-                f"VM_USER={self.VM_USER}",
+                f"vm_pause_timeout={self.vm_pause_timeout}",
+                f"vm_resume_timeout={self.vm_resume_timeout}",
+                f"vm_stop_timeout={self.vm_stop_timeout}",
                 f"working_directory={self.working_directory})",
             ]
         )

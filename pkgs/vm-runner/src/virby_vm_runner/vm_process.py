@@ -256,6 +256,11 @@ class VMProcess:
         if self.config.rosetta_enabled:
             cmd.extend(["--device", "rosetta,mountTag=rosetta"])
 
+        # Add shared directories, if any
+        shared_dirs = self.config.shared_dirs
+        for tag, path in shared_dirs.items():
+            cmd.extend(["--device", f"virtio-fs,sharedDir={path},mountTag={tag}"])
+
         return cmd
 
     async def _get_state_info(self, max_retries: int = 3) -> dict | None:
@@ -661,7 +666,7 @@ class VMProcess:
         if not self.is_running:
             raise VMRuntimeError("Cannot pause: VM is not running")
 
-        # Check if VM can be paused with timeout
+        # Check if VM can be paused
         can_pause = await with_timeout(self.can_pause, 5.0, "Can pause check")
 
         if not can_pause:
@@ -721,19 +726,19 @@ class VMProcess:
             logger.debug("VM not running, nothing to pause or stop")
             return False
 
-        # Try to pause with shorter timeout first
+        # Try to pause first
         try:
-            pause_timeout = min(timeout // 2, 15)  # Half timeout or 15s max
-            if await with_timeout(self.can_pause, 3.0, "Can pause check"):
+            pause_timeout = min(timeout // 2, 15)
+            if await with_timeout(self.can_pause, 1.0, "Can pause check"):
                 await self.pause(pause_timeout)
                 return True
             else:
-                logger.debug("VM cannot be paused, falling back to stop")
+                logger.debug("VM cannot be paused, stopping instead...")
 
         except VMRuntimeError as e:
-            logger.warning(f"Failed to pause VM: {e}, falling back to stop")
+            logger.warning(f"Failed to pause VM: {e}, stopping instead...")
 
-        # Fall back to stop with remaining timeout
+        # Fall back to stop
         stop_timeout = max(timeout - pause_timeout if "pause_timeout" in locals() else timeout, 10)
         await self.stop(stop_timeout)
         return False
@@ -759,27 +764,24 @@ class VMProcess:
         if current_state == VMProcessState.PAUSED:
             try:
                 if await self.can_resume():
-                    logger.info("Attempting to resume paused VM instead of starting...")
+                    logger.info("Attempting to resume VM...")
                     await self.resume()
 
-                    # VM should now be running, return cached IP or rediscover
                     if self._ip_address:
-                        logger.info(f"Successfully resumed VM at {self._ip_address}")
+                        logger.info(f"Successfully resumed VM (ip: {self._ip_address})")
                         return self._ip_address
                     else:
-                        # IP might have changed, rediscover
+                        # IP not cached, rediscover
                         logger.debug("VM resumed but IP not cached, rediscovering...")
                         ip = await self._discover_ip_address()
                         return ip
                 else:
-                    logger.debug("VM cannot be resumed, falling back to start")
+                    logger.debug("VM cannot be resumed, starting instead...")
             except Exception as e:
-                logger.warning(f"Failed to resume VM, falling back to start: {e}")
+                logger.warning(f"Failed to resume VM: {e}, starting instead...")
                 # Ensure VM is properly stopped before starting
                 await self.stop()
 
-        # Fall back to normal start
-        logger.info("Starting VM from stopped state...")
         return await self.start()
 
     @property

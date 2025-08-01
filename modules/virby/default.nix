@@ -168,6 +168,19 @@ in
       '';
     };
 
+    sharedDirectories = lib.mkOption {
+      type = with lib.types; attrsOf str;
+      default = { };
+      description = ''
+        An attribute set of directories that will be shared with the VM as virtio-fs devices.
+
+        The attribute name will be used as the mount tag.
+      '';
+      example = {
+        tmp-share = "/tmp/virby";
+      };
+    };
+
     speedFactor = lib.mkOption {
       type = lib.types.int;
       default = 1;
@@ -229,6 +242,7 @@ in
           port = cfg.port;
           rosetta = cfg.rosetta;
           ttl = cfg.onDemand.ttl * 60; # Convert to seconds
+          shared-dirs = cfg.sharedDirectories;
         }
       );
 
