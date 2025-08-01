@@ -708,8 +708,8 @@ class VMProcess:
         except Exception as e:
             raise VMRuntimeError(f"Error resuming VM: {e}")
 
-    async def safe_pause_or_stop(self, timeout: int = 30) -> bool:
-        """Attempt to pause VM with progressive timeout, fall back to stop.
+    async def pause_or_stop(self, timeout: int = 30) -> bool:
+        """Attempt to pause VM, fall back to stop.
 
         Args:
             timeout: Total timeout for the operation
@@ -738,8 +738,8 @@ class VMProcess:
         await self.stop(stop_timeout)
         return False
 
-    async def safe_resume_or_start(self) -> str:
-        """Attempt to resume VM, fall back to start if resume fails.
+    async def resume_or_start(self) -> str:
+        """Attempt to resume VM, fall back to start.
 
         Returns:
             str: IP address of the VM

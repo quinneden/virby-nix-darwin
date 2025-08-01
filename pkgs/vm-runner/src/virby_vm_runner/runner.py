@@ -71,7 +71,7 @@ class VirbyVMRunner:
         if self.config.on_demand_enabled:
             can_resume = self.vm_process.can_resume()
             if can_resume or not vm_running:
-                ip = await self.vm_process.safe_resume_or_start()
+                ip = await self.vm_process.resume_or_start()
                 logger.info(f"VM ready (ip: {ip})")
         else:
             if not vm_running:
@@ -168,7 +168,7 @@ class VirbyVMRunner:
                 logger.info("TTL expired with no active connections, shutting down VM")
                 # In on-demand mode, try pause before stop
                 if self.config.on_demand_enabled:
-                    was_paused = await self.vm_process.safe_pause_or_stop()
+                    was_paused = await self.vm_process.pause_or_stop()
                     if was_paused:
                         logger.info("VM paused")
                     else:
