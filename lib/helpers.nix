@@ -56,13 +56,31 @@ let
         mib = mem;
       in
       validateMin mib;
+
+  isUpper = c: builtins.match "[A-Z]" c != null;
+
+  toScreamingSnakeCase =
+    with lib;
+    s:
+    concatStrings (
+      map (
+        c:
+        if isUpper c then
+          "_" + c
+        else if c == "-" then
+          "_"
+        else
+          toUpper c
+      ) (stringToCharacters s)
+    );
 in
 
 {
   inherit
     logError
     logInfo
-    setupLogFunctions
     parseMemoryMiB
+    setupLogFunctions
+    toScreamingSnakeCase
     ;
 }
