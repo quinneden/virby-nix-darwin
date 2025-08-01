@@ -1,6 +1,6 @@
 [project]
 name = "virby-vm-runner"
-version = "0.2.0"
+version = "0.3.0"
 description = "Vfkit-based VM runner for Virby"
 requires-python = ">=3.10"
 authors = [{ name = "Quinn Edenfield", email = "quinn@qeden.dev" }]

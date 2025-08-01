@@ -1,3 +1,23 @@
+## vm-runner-v0.3.0 (2025-08-01)
+
+### Feat
+
+- **vm-runner,module**: add support for arbitrary shared directories
+
+### Fix
+
+- **vm-runner**: fix error message in shared_dirs config validation
+- **vm-runner**: validate non-privileged port range in config
+- **vm-runner**: remove obsolete test_ssh_connectivity function
+- **vm-runner**: stop using typing.Optional
+- **lib,module**: refactor parseMemoryString function
+
+### Refactor
+
+- **module**: split module options into separate file
+- **vm-runner**: rename functions
+- **vm-runner,lib**: generate constants for python from Nix
+
 ## vm-runner-v0.2.0 (2025-07-27)
 
 ### Feat
