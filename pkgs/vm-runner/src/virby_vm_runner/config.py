@@ -104,7 +104,7 @@ class VMConfig:
         self._shared_dirs: dict[str, Path] = {}
         shared_dirs = self._config.get("shared-dirs", {})
         if not isinstance(shared_dirs, dict):
-            raise VMConfigurationError(f"Invalid shared-dirs: {shared_dirs}. Expected: list")
+            raise VMConfigurationError(f"Invalid shared-dirs: {shared_dirs}. Expected: dictionary")
         for tag, path in shared_dirs.items():
             host_path = Path(path)
             if not host_path.exists():
