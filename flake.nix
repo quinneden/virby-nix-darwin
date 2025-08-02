@@ -12,7 +12,7 @@
       _lib = import ./lib { inherit lib; };
 
       darwinSystems = lib.systems.doubles.darwin;
-      linuxSystems = map (f: lib.replaceStrings [ "darwin" ] [ "linux" ] f) darwinSystems;
+      linuxSystems = _lib.helpers.doppelganger darwinSystems;
 
       pkgsFor = systems: f: lib.genAttrs systems (system: f (import nixpkgs { inherit system; }));
 

@@ -7,18 +7,15 @@ let
   RED = "${ESC}[31m";
   RESET = "${ESC}[0m";
 
-  logInfo = "printf \"[$(date '+%Y-%m-%d %H:%M:%S')] ${GREEN}INFO:${RESET} %s\n\"";
+  doppelganger =
+    f:
+    let
+      swap = f: lib.replaceStrings [ "darwin" ] [ "linux" ] f;
+    in
+    if (lib.isList f) then map (l: swap l) f else swap f;
+
   logError = "printf \"[$(date '+%Y-%m-%d %H:%M:%S')] ${RED}ERROR:${RESET} %s\n\"";
-
-  setupLogFunctions = ''
-    logInfo() {
-      echo -e "${GREEN}[virby]${RESET} $*" >&2
-    }
-
-    logError() {
-      echo -e "${RED}[virby]${RESET} $*" >&2
-    }
-  '';
+  logInfo = "printf \"[$(date '+%Y-%m-%d %H:%M:%S')] ${GREEN}INFO:${RESET} %s\n\"";
 
   parseMemoryMiB =
     with lib;
@@ -57,26 +54,38 @@ let
       in
       validateMin mib;
 
-  isUpper = c: builtins.match "[A-Z]" c != null;
+  setupLogFunctions = ''
+    logInfo() {
+      echo -e "${GREEN}[virby]${RESET} $*" >&2
+    }
+    logError() {
+      echo -e "${RED}[virby]${RESET} $*" >&2
+    }
+  '';
 
   toScreamingSnakeCase =
     with lib;
     s:
+    let
+      isUpper = c: match "[A-Z]" c != null;
+      chars = stringToCharacters s;
+    in
     concatStrings (
       map (
         c:
-        if isUpper c then
+        if (isUpper c && c != elemAt chars 0) then
           "_" + c
         else if c == "-" then
           "_"
         else
           toUpper c
-      ) (stringToCharacters s)
+      ) chars
     );
 in
 
 {
   inherit
+    doppelganger
     logError
     logInfo
     parseMemoryMiB
