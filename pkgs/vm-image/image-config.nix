@@ -159,4 +159,8 @@ in
   virtualisation = {
     rosetta.enable = cfg.rosetta;
   };
+
+  networking.dhcpcd.extraConfig = ''
+    clientid ""
+  '';
 }
