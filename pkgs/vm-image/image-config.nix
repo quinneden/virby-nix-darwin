@@ -49,7 +49,12 @@ in
     extension = "img";
   };
 
-  networking.hostName = lib.mkForce vmHostName;
+  networking = {
+    hostName = lib.mkForce vmHostName;
+    dhcpcd.extraConfig = lib.mkForce ''
+      clientid ""
+    '';
+  };
 
   nix = {
     channel.enable = false;
