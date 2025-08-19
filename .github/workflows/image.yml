@@ -9,7 +9,7 @@ on:
       [
         "!flake.nix",
         "!lib/**",
-        "!modules/**",
+        "!module/**",
         "!pkgs/vm-runner/**",
         "!README.md",
         "flake.lock",

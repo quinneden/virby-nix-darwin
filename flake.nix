@@ -22,7 +22,7 @@
     {
       darwinModules = {
         default = self.darwinModules.virby;
-        virby = import ./modules/virby { inherit _lib self; };
+        virby = import ./module { inherit _lib self; };
       };
 
       packages =
