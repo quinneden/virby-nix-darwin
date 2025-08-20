@@ -57,11 +57,11 @@ buildPythonApplication {
     ''} > src/virby_vm_runner/constants.py
   '';
 
-  meta = with lib; {
+  meta = {
     description = "Vfkit-based VM runner for Virby";
     homepage = "https://github.com/quinneden/virby-nix-darwin";
-    license = licenses.mit;
-    platforms = platforms.darwin;
+    license = lib.licenses.mit;
+    platforms = lib.platforms.darwin;
     mainProgram = "virby-vm";
   };
 }
