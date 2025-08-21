@@ -13,11 +13,11 @@ help:
 
 clean:
     @echo "Cleaning cache dirs..."
-    @rm -rf dist build *.egg-info
-    @find . -type d \
+    @find ../.. -type d \
       -not -path "*/.venv/*" "(" \
         -name "*.egg-info" -or \
         -name ".*_cache" -or \
+        -name ".ropeproject" -or \
         -name "__pycache__" -or \
         -name "build" -or \
         -name "dist" -or \
