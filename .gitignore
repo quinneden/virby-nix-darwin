@@ -21,6 +21,8 @@ benchmark-results/
 # Misc
 *.bak
 *.bck
+.claude/
+.context/
 .direnv/
 .DS_Store
 .zed/
