@@ -24,6 +24,7 @@ in
   imports = [ "${inputs.nixpkgs}/nixos/modules/image/file-options.nix" ];
 
   boot = {
+    enableContainers = lib.mkDefault false;
     kernelParams = [ "console=hvc0" ];
     loader = {
       efi.canTouchEfiVariables = true;
@@ -32,7 +33,18 @@ in
     };
   };
 
-  documentation.enable = false;
+  documentation = {
+    enable = false;
+    nixos.enable = false;
+    man.enable = false;
+    info.enable = false;
+    doc.enable = false;
+  };
+
+  environment = {
+    defaultPackages = lib.mkDefault [ ];
+    stub-ld.enable = lib.mkDefault false;
+  };
 
   fileSystems = {
     "/".options = [
@@ -78,6 +90,12 @@ in
       };
   };
 
+  programs = {
+    less.lessopen = lib.mkDefault null;
+    command-not-found.enable = lib.mkDefault false;
+    fish.generateCompletions = lib.mkDefault false;
+  };
+
   security.sudo = {
     enable = cfg.debug;
     wheelNeedsPassword = !cfg.debug;
@@ -85,6 +103,7 @@ in
 
   services = {
     getty = lib.optionalAttrs cfg.debug { autologinUser = vmUser; };
+    logrotate.enable = lib.mkDefault false;
 
     openssh = {
       enable = true;
@@ -95,11 +114,15 @@ in
         PasswordAuthentication = false;
       };
     };
+
+    udisks2.enable = lib.mkDefault false;
   };
 
   system = {
     disableInstallerTools = true;
-    stateVersion = lib.versions.majorMinor lib.version;
+    nixos.revision = null;
+    stateVersion = "25.05";
+    systemBuilderArgs.allowSubstitutes = true;
   };
 
   # Virtualization.framework's virtiofs implementation will grant any guest user access
@@ -158,5 +181,12 @@ in
 
   virtualisation = {
     rosetta.enable = cfg.rosetta;
+  };
+
+  xdg = {
+    autostart.enable = lib.mkDefault false;
+    icons.enable = lib.mkDefault false;
+    mime.enable = lib.mkDefault false;
+    sounds.enable = lib.mkDefault false;
   };
 }
