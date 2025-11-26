@@ -51,7 +51,11 @@
       devShells = perDarwinSystem (pkgs: {
         default = pkgs.mkShellNoCC {
           name = "virby-dev";
-          packages = [ pkgs.vfkit ];
+          packages = with pkgs; [
+            krunkit
+            uv
+            vfkit
+          ];
         };
       });
 
@@ -59,4 +63,11 @@
         pkgs: pkgs.nixfmt-tree.override { settings.formatter.nixfmt.options = [ "--strict" ]; }
       );
     };
+
+  nixConfig = {
+    extra-substituters = [ "https://virby-nix-darwin.cachix.org" ];
+    extra-trusted-public-keys = [
+      "virby-nix-darwin.cachix.org-1:z9GiEZeBU5bEeoDQjyfHPMGPBaIQJOOvYOOjGMKIlLo="
+    ];
+  };
 }
