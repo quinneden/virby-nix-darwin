@@ -12,6 +12,7 @@
   },
   rosetta ? false,
 }:
+
 let
   cfg = { inherit debug onDemand rosetta; };
 
@@ -25,4 +26,5 @@ let
     ];
   };
 in
+
 nixosSystem.config.system.build.images.raw-efi

@@ -1,4 +1,5 @@
 { lib, ... }:
+
 {
   options.services.virby = {
     enable = lib.mkEnableOption "Virby, a vfkit-based linux builder for nix-darwin";

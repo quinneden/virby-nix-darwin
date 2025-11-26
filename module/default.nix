@@ -5,6 +5,7 @@
   pkgs,
   ...
 }:
+
 let
   inherit (_lib.constants)
     baseDiskFileName
@@ -200,6 +201,7 @@ let
     fi
   '';
 in
+
 {
   imports = [ ./options.nix ];
 

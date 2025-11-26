@@ -7,6 +7,7 @@
 
   outputs =
     { self, nixpkgs }@inputs:
+
     let
       inherit (nixpkgs) lib;
       _lib = import ./lib { inherit lib; };
@@ -19,6 +20,7 @@
       perDarwinSystem = pkgsFor darwinSystems;
       perLinuxSystem = pkgsFor linuxSystems;
     in
+
     {
       darwinModules = {
         default = self.darwinModules.virby;

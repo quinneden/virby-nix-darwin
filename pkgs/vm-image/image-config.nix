@@ -7,6 +7,7 @@
   pkgs,
   ...
 }:
+
 let
   inherit (_lib.constants)
     sshHostPrivateKeyFileName
@@ -18,6 +19,7 @@ let
   sshDirPath = "/etc/ssh/";
   sshHostPrivateKeyPath = sshDirPath + sshHostPrivateKeyFileName;
 in
+
 {
   imports = [ "${inputs.nixpkgs}/nixos/modules/image/file-options.nix" ];
 
