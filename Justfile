@@ -11,6 +11,7 @@ help:
     @echo "    lint           Run linting checks"
     @echo "    type-check     Run mypy type checking"
 
+[working-directory("../..")]
 clean:
     @echo "Cleaning cache dirs..."
     @rm -rf dist build *.egg-info
