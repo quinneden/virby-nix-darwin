@@ -29,11 +29,11 @@
 
       packages =
         perDarwinSystem (pkgs: {
-          default = self.packages.${pkgs.system}.vm-runner;
+          default = self.packages.${pkgs.stdenv.hostPlatform.system}.vm-runner;
           vm-runner = pkgs.python3Packages.callPackage ./pkgs/vm-runner { inherit _lib; };
         })
         // perLinuxSystem (pkgs: {
-          default = self.packages.${pkgs.system}.vm-image;
+          default = self.packages.${pkgs.stdenv.hostPlatform.system}.vm-image;
           vm-image = pkgs.callPackage ./pkgs/vm-image { inherit _lib inputs lib; };
         });
 

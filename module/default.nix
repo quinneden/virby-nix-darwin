@@ -39,11 +39,11 @@ let
       gnugrep
       nix
       openssh
-      self.packages.${system}.vm-runner
+      self.packages.${stdenv.hostPlatform.system}.vm-runner
     ]
   );
 
-  linuxSystem = doppelganger pkgs.system;
+  linuxSystem = doppelganger pkgs.stdenv.hostPlatform.system;
 
   imageWithFinalConfig = self.packages.${linuxSystem}.vm-image.override {
     inherit (cfg)
@@ -244,7 +244,7 @@ in
     (lib.mkIf cfg.enable {
       assertions = [
         {
-          assertion = !(pkgs.system != "aarch64-darwin" && cfg.rosetta);
+          assertion = !(pkgs.stdenv.hostPlatform.system != "aarch64-darwin" && cfg.rosetta);
           message = "Rosetta is only supported on aarch64-darwin systems.";
         }
       ];
