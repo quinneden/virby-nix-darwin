@@ -14,14 +14,21 @@ result/
 
 # Testing
 .env
+benchmark-results/
 test/
 virby-vm-benchmark-*
-benchmark-results/
 
 # Misc
 *.bak
 *.bck
 .direnv/
 .DS_Store
-.zed/
 .rules
+.zed/
+
+# Agent related
+.claude/
+.context/
+.rules
+CLAUDE.md
+GEMINI.md
