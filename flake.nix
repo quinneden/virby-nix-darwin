@@ -55,6 +55,8 @@
         };
       });
 
-      formatter = perDarwinSystem (pkgs: pkgs.nixfmt-tree);
+      formatter = perDarwinSystem (
+        pkgs: pkgs.nixfmt-tree.override { settings.formatter.nixfmt.options = [ "--strict" ]; }
+      );
     };
 }
