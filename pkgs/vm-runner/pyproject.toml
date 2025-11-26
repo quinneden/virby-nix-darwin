@@ -20,6 +20,7 @@ dev = [
   "isort>=5.12.0",
   "mypy>=1.0.0",
   "ruff>=0.1.0",
+  "tombi>=0.6.57",
   "types-aiofiles>=24.1.0.20250606",
 ]
 
@@ -33,9 +34,14 @@ exclude = [
   "**/node_modules",
   "**/__pycache__",
 ]
-reportMissingImports = "none"
+reportMissingImports = false
 reportMissingTypeStubs = false
-reportUnsupportedDunderAll = "none"
+reportUnsupportedDunderAll = false
+reportMissingParameterType = false
+reportUnknownParameterType = false
+reportUnknownVariableType = false
+reportUnknownArgumentType = false
+reportAny = false
 
 [tool.commitizen]
 name = "cz_conventional_commits"
