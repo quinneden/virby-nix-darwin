@@ -17,7 +17,6 @@ let
   cfg = { inherit debug onDemand rosetta; };
 
   nixosSystem = lib.nixosSystem {
-    inherit (pkgs) system;
     inherit pkgs;
     specialArgs = { inherit _lib cfg inputs; };
     modules = [
