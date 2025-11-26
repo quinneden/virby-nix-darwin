@@ -5,6 +5,7 @@ import logging
 import random
 from functools import wraps
 from json import JSONDecodeError
+from typing import final
 
 import httpx
 
@@ -14,6 +15,7 @@ logging.getLogger("httpcore.connection").setLevel(logging.ERROR)
 logging.getLogger("httpcore.http11").setLevel(logging.ERROR)
 
 
+@final
 class VirtualMachineState:
     """Enumeration of virtual machine states returned by vfkit's RESTful API."""
 
