@@ -8,9 +8,15 @@ Add virby to your flake inputs:
 
 ```nix
 {
-  inputs.virby = {
-    url = "github:quinneden/virby-nix-darwin";
-    inputs.nixpkgs.follows = "nixpkgs";
+  inputs = {
+    virby.url = "github:quinneden/virby-nix-darwin";
+    # It is important that you dont add the line:
+    # 
+    #   inputs.nixpkgs.follows = "nixpkgs";
+    #
+    # until after you've activated with `darwin-rebuild`. This way, the cached
+    # image can be used and you won't have to build from source (which requires
+    # an existing aarch64-linux builder).
   };
 
   outputs = { virby, ... }: {
