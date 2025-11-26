@@ -1,7 +1,8 @@
 # Python
 *.egg-info/
 *.test.json
-.*_cache
+.*_cache/
+.basedpyright/
 .coverage
 .mypy_cache/
 .pytest_cache/
