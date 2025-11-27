@@ -294,6 +294,8 @@ in
           UserKnownHostsFile /dev/null
           HostKeyAlias ${sshHostKeyAlias}
           Hostname localhost
+          AddressFamily inet
+          IdentitiesOnly yes
           IdentityFile ${workingDirectory}/${sshUserPrivateKeyFileName}
           Port ${toString cfg.port}
           StrictHostKeyChecking yes
