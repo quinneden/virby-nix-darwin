@@ -16,11 +16,26 @@ on:
         "flake.lock",
         "pkgs/vm-image/**",
       ]
+  pull_request:
+    types: [closed]
+    branches: [main]
+    paths:
+      [
+        "!CLAUDE.md",
+        "!flake.nix",
+        "!lib/**",
+        "!module/**",
+        "!pkgs/vm-runner/**",
+        "!README.md",
+        "flake.lock",
+        "pkgs/vm-image/**",
+      ]
   workflow_dispatch:
 
 jobs:
   build:
     name: packages.${{ matrix.arch }}.vm-image
+    if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
     strategy:
       matrix:
         include:
