@@ -314,7 +314,7 @@ in
 
             Sockets.Listener = {
               SockFamily = "IPv4";
-              SockNodeName = "localhost";
+              SockNodeName = cfg.bindAddress;
               SockServiceName = toString cfg.port;
             };
 

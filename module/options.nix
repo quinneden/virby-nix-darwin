@@ -25,6 +25,20 @@
       '';
     };
 
+    bindAddress = lib.mkOption {
+      type = lib.types.str;
+      default = "localhost";
+      description = ''
+        The address to bind the SSH listener to.
+
+        By default, this is "localhost" which only allows local connections.
+        Set to "0.0.0.0" to allow remote connections (e.g., from Tailscale network).
+
+        WARNING: Setting this to "0.0.0.0" exposes the builder to the network.
+        Ensure proper firewall/ACL configuration when enabling remote access.
+      '';
+    };
+
     debug = lib.mkOption {
       type = lib.types.bool;
       default = false;
