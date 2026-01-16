@@ -113,7 +113,7 @@ class VMConfig:
 
         # Store other config values
         self._ip_discovery_timeout = self._config.get("ip_discovery_timeout", 60)
-        self._ssh_ready_timeout = self._config.get("ssh_ready_timeout", 30)
+        self._ssh_ready_timeout = self._config.get("ssh_ready_timeout", 300)
 
         # VM operation timeouts
         self._vm_pause_timeout = self._config.get("vm_pause_timeout", 30)
