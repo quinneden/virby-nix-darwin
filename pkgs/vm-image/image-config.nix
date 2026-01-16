@@ -65,6 +65,7 @@ in
 
   networking = {
     hostName = lib.mkForce vmHostName;
+    firewall.enable = false;
     dhcpcd.extraConfig = lib.mkForce ''
       clientid ""
     '';
@@ -107,10 +108,15 @@ in
 
     openssh = {
       enable = true;
-      hostKeys = [ ]; # disable automatic host key generation
+      # Use standard NixOS host key generation
+      hostKeys = [
+        {
+          path = "/etc/ssh/ssh_host_ed25519_key";
+          type = "ed25519";
+        }
+      ];
 
       settings = {
-        HostKey = sshHostPrivateKeyPath;
         PasswordAuthentication = false;
       };
     };
@@ -125,49 +131,10 @@ in
     systemBuilderArgs.allowSubstitutes = true;
   };
 
-  # Virtualization.framework's virtiofs implementation will grant any guest user access
-  # to mounted files; they always appear to be owned by the effective UID and so access cannot
-  # be restricted.
-  # To protect the guest's SSH host key, the VM is configured to prevent any logins (via
-  # console, SSH, etc) by default.  This service then runs before sshd, mounts virtiofs,
-  # copies the keys to local files (with appropriate ownership and permissions), and unmounts
-  # the filesystem before allowing SSH to start.
-  # Once SSH has been allowed to start (and given the guest user a chance to log in), the
-  # virtiofs must never be mounted again (as the user could have left some process active to
-  # read its secrets). This is prevented by `unitconfig.ConditionPathExists` below.
-  systemd.services.install-sshd-keys =
-    let
-      mountTag = "sshd-keys";
-      mountPoint = "/var/${mountTag}";
-      authorizedKeysDir = "${sshDirPath}/authorized_keys.d";
-    in
-    {
-      description = "Install sshd's host and authorized keys";
-
-      path = with pkgs; [
-        coreutils
-        mount
-        umount
-      ];
-
-      before = [ "sshd.service" ];
-      requiredBy = [ "sshd.service" ];
-
-      enableStrictShellChecks = true;
-      serviceConfig.Type = "oneshot";
-      unitConfig.ConditionPathExists = "!${authorizedKeysDir}/${vmUser}";
-
-      script = ''
-        mkdir -p ${mountPoint}
-        mount -t virtiofs -o nodev,noexec,nosuid,ro ${mountTag} ${mountPoint}
-
-        install -Dm600 -t ${sshDirPath} ${mountPoint}/${sshHostPrivateKeyFileName}
-        install -Dm644 ${mountPoint}/${sshUserPublicKeyFileName} ${authorizedKeysDir}/${vmUser}
-
-        umount ${mountPoint}
-        rm -rf ${mountPoint}
-      '';
-    };
+  # NOTE: The install-sshd-keys service has been replaced by:
+  # 1. Standard NixOS hostKeys generation (openssh.hostKeys = [...])
+  # 2. User authorized keys via extraConfig (users.users.builder.openssh.authorizedKeys.keys)
+  # The old virtiofs mount approach caused service ordering issues with newer NixOS.
 
   users = {
     allowNoPasswordLogin = true;
