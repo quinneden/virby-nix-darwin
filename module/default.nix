@@ -200,6 +200,24 @@ let
       exit 1
     fi
   '';
+
+  buildMachines = [
+    {
+      hostName = vmHostName;
+      maxJobs = cfg.cores;
+      protocol = "ssh-ng";
+      supportedFeatures = [
+        "benchmark"
+        "big-parallel"
+        "kvm"
+        "nixos-test"
+      ];
+      speedFactor = cfg.speedFactor;
+      systems = [ linuxSystem ] ++ lib.optional cfg.rosetta "x86_64-linux";
+    }
+  ];
+
+  distributedBuilds = lib.mkForce true;
 in
 
 {
@@ -325,26 +343,33 @@ in
           // lib.optionalAttrs cfg.debug { StandardOutPath = "/tmp/${daemonName}.log"; };
         };
       };
+    })
 
+    (lib.mkIf (!cfg.supportDeterminateNix) {
       nix = {
-        buildMachines = [
-          {
-            hostName = vmHostName;
-            maxJobs = cfg.cores;
-            protocol = "ssh-ng";
-            supportedFeatures = [
-              "benchmark"
-              "big-parallel"
-              "kvm"
-              "nixos-test"
-            ];
-            speedFactor = cfg.speedFactor;
-            systems = [ linuxSystem ] ++ lib.optional cfg.rosetta "x86_64-linux";
-          }
-        ];
-
-        distributedBuilds = lib.mkForce true;
+        inherit buildMachines distributedBuilds;
         settings.builders-use-substitutes = lib.mkDefault true;
+      };
+    })
+
+    (lib.mkIf cfg.supportDeterminateNix {
+      assertions = [
+        {
+          assertion = config.determinateNix.enable or false;
+          message = ''
+            `supportDeterminateNix = true` requires the Determinate module for Nix-darwin to be enabled.
+
+            To enable:
+            - Add `determinate.url = "github:determinatesystems/determinate"` to your flake inputs.
+            - Include `inputs.determinate.darwinModules.default` in your imports.
+            - Set `determinateNix.enable = true`.
+          '';
+        }
+      ];
+
+      determinateNix = {
+        inherit buildMachines distributedBuilds;
+        customSettings.builders-use-substitutes = lib.mkDefault true;
       };
     })
   ];
