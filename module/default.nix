@@ -2,6 +2,7 @@
 {
   config,
   lib,
+  options,
   pkgs,
   ...
 }:
@@ -355,7 +356,7 @@ in
     (lib.mkIf cfg.supportDeterminateNix {
       assertions = [
         {
-          assertion = config.determinateNix.enable or false;
+          assertion = options ? determinateNix && config.determinateNix.enable;
           message = ''
             `supportDeterminateNix = true` requires the Determinate module for Nix-darwin to be enabled.
 
@@ -366,8 +367,10 @@ in
           '';
         }
       ];
+    })
 
-      determinateNix = {
+    (lib.optionalAttrs (options ? determinateNix) {
+      determinateNix = lib.mkIf cfg.supportDeterminateNix {
         inherit buildMachines distributedBuilds;
         customSettings.builders-use-substitutes = lib.mkDefault true;
       };
