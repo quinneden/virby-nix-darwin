@@ -131,7 +131,10 @@ class SocketActivation:
             if value:
                 logger.debug(f"Found env var {env_var}={value}")
 
-        for fd in range(3, 11):
+        # launchd can assign the inherited listener socket above the stdio range,
+        # and that layout changes depending on whether stdout/stderr are redirected.
+        # Scan a broader descriptor range so debug logging does not affect startup.
+        for fd in range(3, 256):
             test_sock = None
             try:
                 fd_stat = os.fstat(fd)
