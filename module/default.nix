@@ -15,6 +15,7 @@ let
     sshHostPublicKeyFileName
     sshKnownHostsFileName
     sshUserPrivateKeyFileName
+    sshUserPrivateKeySharedFileName
     sshUserPublicKeyFileName
     vmHostName
     vmUser
@@ -108,20 +109,18 @@ let
       local temp_dir=$(mktemp -d)
       local temp_host_key="$temp_dir/host_key"
       local temp_user_key="$temp_dir/user_key"
-      local user_key_required_mode=${if cfg.allowUserSsh then "644" else "600"}
 
       trap "rm -rf $temp_dir" RETURN
 
       ssh-keygen -C ${darwinUser}@darwin -f "$temp_user_key" -N "" -t ed25519 || return 1
       ssh-keygen -C root@${vmHostName} -f "$temp_host_key" -N "" -t ed25519 || return 1
 
-      # Set permissions based on `cfg.allowUserSsh`
       chmod 640 "$temp_host_key.pub" "$temp_user_key.pub"
       chmod 600 "$temp_host_key"
-      chmod "$user_key_required_mode" "$temp_user_key"
+      chmod 600 "$temp_user_key"
 
       # Remove old keys if they exist
-      rm -f ${sshUserPrivateKeyFileName} ${sshHostPublicKeyFileName}
+      rm -f ${sshUserPrivateKeyFileName} ${sshUserPrivateKeySharedFileName} ${sshHostPublicKeyFileName}
       rm -rf ${sshdKeysSharedDirName}
 
       echo "${sshHostKeyAlias} $(cat $temp_host_key.pub)" > ${sshKnownHostsFileName}
@@ -176,9 +175,8 @@ let
       fi
     fi
 
-    # If `cfg.allowUserSsh` is true, the user key should be group-readable, otherwise it
-    # should be owner-only
-    user_key_required_mode=${if cfg.allowUserSsh then "644" else "600"}
+    # The runner always uses the private key directly, so it must stay owner-only.
+    user_key_required_mode=600
     user_key_actual_mode=$(stat -c "%a" ${sshUserPrivateKeyFileName} 2>/dev/null)
 
     if [[ $user_key_required_mode -ne $user_key_actual_mode ]]; then
@@ -188,15 +186,29 @@ let
       fi
     fi
 
-    if ! chmod 'go+r' ${sshKnownHostsFileName}; then
-      ${logError} "Failed to set permissions on ${sshKnownHostsFileName}"
+    if [[ ${if cfg.allowUserSsh then "1" else "0"} -eq 1 ]]; then
+      if ! cp -f ${sshUserPrivateKeyFileName} ${sshUserPrivateKeySharedFileName}; then
+        ${logError} "Failed to create shared SSH key copy"
+        exit 1
+      fi
+
+      if ! chmod 644 ${sshUserPrivateKeySharedFileName}; then
+        ${logError} "Failed to set permissions on ${sshUserPrivateKeySharedFileName}"
+        exit 1
+      fi
+    else
+      rm -f ${sshUserPrivateKeySharedFileName}
+    fi
+
+    if ! [[ -f ${sshHostPublicKeyFileName} ]]; then
+      ${logError} "Missing host public key: ${sshHostPublicKeyFileName}"
       exit 1
     fi
 
-    ${logInfo} "Starting VM..."
+    echo "${sshHostKeyAlias} $(cat ${sshHostPublicKeyFileName})" > ${sshKnownHostsFileName}
 
-    if ! exec virby-vm; then
-      ${logError} "Failed to start the VM"
+    if ! chmod 'go+r' ${sshKnownHostsFileName}; then
+      ${logError} "Failed to set permissions on ${sshKnownHostsFileName}"
       exit 1
     fi
   '';
@@ -304,6 +316,7 @@ in
         fi
 
         chown ${darwinUser}:${darwinGroup} ${workingDirectory}
+
       '';
 
       environment.etc."ssh/ssh_config.d/100-${vmHostName}.conf".text = ''
@@ -314,7 +327,9 @@ in
           Hostname localhost
           AddressFamily inet
           IdentitiesOnly yes
-          IdentityFile ${workingDirectory}/${sshUserPrivateKeyFileName}
+          IdentityFile ${workingDirectory}/${
+            if cfg.allowUserSsh then sshUserPrivateKeySharedFileName else sshUserPrivateKeyFileName
+          }
           Port ${toString cfg.port}
           StrictHostKeyChecking yes
           User ${vmUser}
