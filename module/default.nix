@@ -83,10 +83,11 @@ let
     }
   );
 
-  runnerScript = pkgs.writeShellScript "${daemonName}-runner" ''
+  prepareVmScript = pkgs.writeShellScript "${daemonName}-prepare-vm" ''
     PATH=${binPath}:$PATH
 
     set -euo pipefail
+    cd ${workingDirectory}
 
     NEEDS_GENERATE_SSH_KEYS=0
 
@@ -317,6 +318,13 @@ in
 
         chown ${darwinUser}:${darwinGroup} ${workingDirectory}
 
+        logInfo "Preparing Virby VM runtime files..."
+        if ! ${prepareVmScript}; then
+          logError "Failed to prepare Virby VM runtime files"
+          exit 1
+        fi
+
+        chown -R ${darwinUser}:${darwinGroup} ${workingDirectory}
       '';
 
       environment.etc."ssh/ssh_config.d/100-${vmHostName}.conf".text = ''
@@ -337,8 +345,17 @@ in
 
       launchd.daemons = {
         ${daemonName} = {
-          path = [ "/bin" ];
-          command = runnerScript;
+          path =
+            with pkgs;
+            [
+              coreutils
+              findutils
+              gnugrep
+              nix
+              openssh
+              self.packages.${pkgs.stdenv.hostPlatform.system}.vm-runner
+            ];
+          command = "${lib.getExe self.packages.${pkgs.stdenv.hostPlatform.system}.vm-runner}";
 
           serviceConfig = {
             UserName = darwinUser;
