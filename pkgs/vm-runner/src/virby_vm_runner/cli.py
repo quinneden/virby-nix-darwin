@@ -12,13 +12,14 @@ from .signal_manager import SignalManager
 from .vm_process import cleanup_orphaned_vfkit_processes
 
 
-def setup_logging(debug: bool = False) -> None:
+def setup_logging(debug: bool = False, force: bool = False) -> None:
     """Setup logging configuration."""
     level = logging.DEBUG if debug else logging.INFO
     logging.basicConfig(
         level=level,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         handlers=[logging.StreamHandler(sys.stdout)],
+        force=force,
     )
 
 
@@ -66,12 +67,13 @@ async def main() -> int:
     signal_manager = SignalManager()
 
     try:
+        setup_logging()
         debug_startup_environment()
 
         config_file_env = os.getenv("VIRBY_VM_CONFIG_FILE")
         config = VMConfig(config_path=config_file_env)
 
-        setup_logging(config.debug_enabled)
+        setup_logging(config.debug_enabled, force=True)
 
         # Setup signal handling once
         signal_manager.setup_signal_handlers()

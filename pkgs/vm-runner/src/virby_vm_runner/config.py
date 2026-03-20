@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import stat
 from pathlib import Path
 from typing import Any, Dict
 
@@ -107,9 +108,28 @@ class VMConfig:
             raise VMConfigurationError(f"Invalid shared-dirs: {shared_dirs}. Expected: dictionary")
         for tag, path in shared_dirs.items():
             host_path = Path(path)
-            if not host_path.exists():
+            try:
+                host_path_stat = host_path.stat()
+            except FileNotFoundError:
                 raise VMConfigurationError(f"Shared directory does not exist on host: {host_path}")
-            self._shared_dirs[tag] = host_path.resolve()
+            except PermissionError:
+                raise VMConfigurationError(
+                    f"Shared directory is not accessible to the virby daemon user: {host_path}"
+                )
+            except OSError as e:
+                raise VMConfigurationError(
+                    f"Failed to access shared directory {host_path}: {e}"
+                ) from e
+
+            if not stat.S_ISDIR(host_path_stat.st_mode):
+                raise VMConfigurationError(f"Shared directory is not a directory: {host_path}")
+
+            try:
+                self._shared_dirs[tag] = host_path.resolve()
+            except OSError as e:
+                raise VMConfigurationError(
+                    f"Failed to resolve shared directory {host_path}: {e}"
+                ) from e
 
         # Store other config values
         self._ip_discovery_timeout = self._config.get("ip_discovery_timeout", 60)
