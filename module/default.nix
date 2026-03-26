@@ -355,7 +355,7 @@ in
               openssh
               self.packages.${pkgs.stdenv.hostPlatform.system}.vm-runner
             ];
-          command = "${lib.getExe self.packages.${pkgs.stdenv.hostPlatform.system}.vm-runner}";
+          command = lib.getExe self.packages.${pkgs.stdenv.hostPlatform.system}.vm-runner;
 
           serviceConfig = {
             UserName = darwinUser;
