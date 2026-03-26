@@ -31,9 +31,9 @@
       description = ''
         Whether to enable debug logging for the VM.
 
-        When enabled, the launchd daemon will direct all stdout/stderr output to log files, as well
-        as the VM's serial output. This is useful for debugging issues with the VM, but it may pose
-        a security risk and should only be enabled when necessary.
+        When enabled, the launchd daemon will direct all stdout/stderr and serial output to log
+        files. This is useful for debugging issues with the VM, but it may pose a security risk and
+        should only be enabled when necessary.
       '';
     };
 
