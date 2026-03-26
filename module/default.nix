@@ -343,6 +343,8 @@ in
           // lib.optionalAttrs cfg.debug { StandardOutPath = "/tmp/${daemonName}.log"; };
         };
       };
+
+      system.build.virbyImage = imageWithFinalConfig;
     })
 
     (lib.mkIf (!cfg.supportDeterminateNix) {
