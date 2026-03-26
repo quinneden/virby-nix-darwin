@@ -48,17 +48,17 @@ jobs:
     runs-on: ${{ matrix.runner }}
 
     steps:
-      - uses: actions/checkout@v4.2.2
+      - uses: actions/checkout@v6
 
       - name: Set up Nix
-        uses: cachix/install-nix-action@v31.4.1
+        uses: cachix/install-nix-action@v31
         with:
           enable_kvm: true
           extra_nix_config: "system-features = benchmark big-parallel kvm nixos-test uid-range"
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Cachix
-        uses: cachix/cachix-action@v16
+        uses: cachix/cachix-action@v17
         with:
           name: virby-nix-darwin
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
