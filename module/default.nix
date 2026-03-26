@@ -53,6 +53,7 @@ let
       extraConfig
       onDemand
       rosetta
+      sharedDirectories
       ;
   };
 

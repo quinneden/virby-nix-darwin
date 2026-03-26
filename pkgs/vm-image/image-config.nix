@@ -169,6 +169,26 @@ in
       '';
     };
 
+  systemd.mounts = lib.mapAttrsToList (
+    tag: _hostPath:
+    let
+      mountPoint = "/mnt/virtiofs/${tag}";
+    in
+    {
+      description = "Mount Virby shared directory '${tag}'";
+      what = tag;
+      where = mountPoint;
+      type = "virtiofs";
+      options = "nodev,nosuid";
+      wantedBy = [ "multi-user.target" ];
+      before = [ "multi-user.target" ];
+    }
+  ) cfg.sharedDirectories;
+
+  systemd.tmpfiles.rules = lib.mapAttrsToList (
+    tag: _hostPath: "d /mnt/virtiofs/${tag} 0755 root root - -"
+  ) cfg.sharedDirectories;
+
   users = {
     allowNoPasswordLogin = true;
     mutableUsers = false;

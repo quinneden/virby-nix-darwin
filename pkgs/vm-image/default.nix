@@ -11,10 +11,18 @@
     ttl = 180;
   },
   rosetta ? false,
+  sharedDirectories ? { },
 }:
 
 let
-  cfg = { inherit debug onDemand rosetta; };
+  cfg = {
+    inherit
+      debug
+      onDemand
+      rosetta
+      sharedDirectories
+      ;
+  };
 
   nixosSystem = lib.nixosSystem {
     inherit pkgs;
