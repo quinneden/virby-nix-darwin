@@ -2,6 +2,7 @@
 {
   config,
   lib,
+  options,
   pkgs,
   ...
 }:
@@ -354,25 +355,28 @@ in
       };
     })
 
-    (lib.mkIf cfg.supportDeterminateNix {
-      assertions = [
-        {
-          assertion = config.determinateNix.enable or false;
-          message = ''
-            `supportDeterminateNix = true` requires the Determinate module for Nix-darwin to be enabled.
+    (lib.mkIf cfg.supportDeterminateNix (
+      {
+        assertions = [
+          {
+            assertion = config.determinateNix.enable or false;
+            message = ''
+              `supportDeterminateNix = true` requires the Determinate module for Nix-darwin to be enabled.
 
-            To enable:
-            - Add `determinate.url = "github:determinatesystems/determinate"` to your flake inputs.
-            - Include `inputs.determinate.darwinModules.default` in your imports.
-            - Set `determinateNix.enable = true`.
-          '';
-        }
-      ];
-
-      determinateNix = {
-        inherit buildMachines distributedBuilds;
-        customSettings.builders-use-substitutes = lib.mkDefault true;
-      };
-    })
+              To enable:
+              - Add `determinate.url = "github:determinatesystems/determinate"` to your flake inputs.
+              - Include `inputs.determinate.darwinModules.default` in your imports.
+              - Set `determinateNix.enable = true`.
+            '';
+          }
+        ];
+      }
+      // lib.optionalAttrs (options ? determinateNix) {
+        determinateNix = {
+          inherit buildMachines distributedBuilds;
+          customSettings.builders-use-substitutes = lib.mkDefault true;
+        };
+      }
+    ))
   ];
 }
