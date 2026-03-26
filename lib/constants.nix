@@ -10,6 +10,7 @@ let
   sshHostPublicKeyFileName = sshHostPrivateKeyFileName + ".pub";
   sshKnownHostsFileName = "ssh_known_hosts";
   sshUserPrivateKeyFileName = "ssh_user_ed25519_key";
+  sshUserPrivateKeySharedFileName = sshUserPrivateKeyFileName + ".shared";
   sshUserPublicKeyFileName = sshUserPrivateKeyFileName + ".pub";
   vmHostName = "virby-vm";
   vmUser = "builder";
@@ -28,6 +29,7 @@ in
     sshHostPublicKeyFileName
     sshKnownHostsFileName
     sshUserPrivateKeyFileName
+    sshUserPrivateKeySharedFileName
     sshUserPublicKeyFileName
     vmHostName
     vmUser

@@ -4,7 +4,12 @@ import asyncio
 import logging
 from pathlib import Path
 
-from .constants import SSH_KNOWN_HOSTS_FILE_NAME, SSH_USER_PRIVATE_KEY_FILE_NAME, VM_USER
+from .constants import (
+    SSH_KNOWN_HOSTS_FILE_NAME,
+    SSH_USER_PRIVATE_KEY_FILE_NAME,
+    VM_HOST_NAME,
+    VM_USER,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +22,7 @@ class SSHConnectivityTester:
         self.username = username
         self.ssh_key_path = working_dir / SSH_USER_PRIVATE_KEY_FILE_NAME
         self.known_hosts_path = working_dir / SSH_KNOWN_HOSTS_FILE_NAME
+        self.host_key_alias = f"{VM_HOST_NAME}-key"
 
         self._ssh_base_command = [
             "ssh",
@@ -27,9 +33,13 @@ class SSHConnectivityTester:
             "-o",
             "PasswordAuthentication=no",
             "-o",
-            "StrictHostKeyChecking=accept-new",
+            "StrictHostKeyChecking=yes",
             "-o",
             f"UserKnownHostsFile={self.known_hosts_path}",
+            "-o",
+            f"HostKeyAlias={self.host_key_alias}",
+            "-o",
+            "IdentitiesOnly=yes",
             "-p",
             "22",
             "-i",

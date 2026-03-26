@@ -144,7 +144,7 @@ If you prefer building the image locally, you can enable the `nix.linux-builder`
 ```nix
 {
   services.virby.debug = true;         # Enable verbose logging
-  services.virby.allowUserSsh = true;  # Allow non-root SSH access
+  services.virby.allowUserSsh = true;  # Allow non-root SSH access with a separate shared key copy
 }
 ```
 

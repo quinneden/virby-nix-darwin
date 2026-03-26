@@ -249,9 +249,12 @@ class VMProcess:
             "virtio-balloon",
         ]
 
-        if self.config.debug_enabled:
-            serial_log = self.working_dir / SERIAL_LOG_FILE_NAME
-            cmd.extend(["--device", f"virtio-serial,logFilePath={serial_log}"])
+        # The guest image is configured with `console=hvc0`, so it always needs
+        # a virtio serial console device to boot. Keep a device
+        # present regardless of debug mode so that toggling it does not require rebuilding the image. 
+        # When debug is disabled, discard the console output to /dev/null
+        serial_log = self.working_dir / SERIAL_LOG_FILE_NAME if self.config.debug_enabled else "/dev/null"
+        cmd.extend(["--device", f"virtio-serial,logFilePath={serial_log}"])
 
         if self.config.rosetta_enabled:
             cmd.extend(["--device", "rosetta,mountTag=rosetta"])
