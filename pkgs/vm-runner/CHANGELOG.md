@@ -1,3 +1,28 @@
+## vm-runner-v0.4.0 (2026-04-16)
+
+### Feat
+
+- add system.build.virbyImage
+- add support for using Virby with Determinate nix
+
+### Fix
+
+- **module**: remove unnecessary string interpolation
+- **module**: fix error when determinate nix module is not imported
+- reword debug module option description
+- force ssh to use IPv4 and only the generated SSH key
+- pkgs.system -> pkgs.stdenv.hostPlatform.system
+- **Justfile**: change working dir for clean recipe to top level
+- **flake**: add '--strict' flag to nixfmt settings
+- **vm-image**: disable unnecessary services/dependencies in image configuration
+- **vm-image**: force sending mac address as the dhcp client id
+
+### Refactor
+
+- **vm-image**: reformat networking config
+- **module**: restructure modules/virby/*.nix -> module/*.nix, update references
+- **lib**: add doppelganger function
+
 ## vm-runner-v0.3.0 (2025-08-01)
 
 ### Feat
