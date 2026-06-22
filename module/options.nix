@@ -116,9 +116,8 @@
         });
       default = { };
       description = ''
-        By default, the VM is always-on, running as a daemon in the background. This allows builds
-        to started right away, but also means the VM will always be consuming (a small amount of)
-        cpu and memory resources.
+        By default, the VM is always-on, running as a daemon in the background, meaning the VM will
+        always be consuming cpu and memory resources.
 
         When enabled, this option will allow the VM to be activated on-demand; when not in use, the
         VM will not be running. When a build job requiring use of the VM is initiated, it signals
