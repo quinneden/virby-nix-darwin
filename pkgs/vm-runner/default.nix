@@ -9,7 +9,8 @@ buildGoModule {
   src = ./.;
 
   vendorHash = null;
-  buildInputs = [ vfkit ];
+
+  ldflags = [ "-X vm-runner/internal/vmprocess.vfkitBin=${lib.getExe vfkit}" ];
 
   meta = {
     description = "Vfkit-based VM runner for Virby";

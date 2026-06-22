@@ -33,6 +33,8 @@ const (
 	VMProcessStateUnknown VMProcessState = "unknown"
 )
 
+var vfkitBin = "vfkit"
+
 type VMProcess struct {
 	apiClient         *api.VfkitAPIClient
 	apiPort           int
@@ -121,7 +123,7 @@ func (vp *VMProcess) buildVfkitCommand() []string {
 	}
 
 	cmd := []string{
-		"vfkit",
+		vfkitBin,
 		"--cpus",
 		fmt.Sprintf("%d", vp.config.Cores),
 		"--memory",
