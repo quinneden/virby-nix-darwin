@@ -91,18 +91,25 @@ If you prefer building the image locally, you can enable the `nix.linux-builder`
 
 ## Configuration
 
-### Basic Settings
+### Available Options
 
-| Option        | Type       | Default    | Description                                  |
-|---------------|------------|------------|----------------------------------------------|
-| `enable`      | _bool_       | `false`    | Enable the service                           |
-| `cores`       | _int_        | `8`        | CPU cores allocated to VM                    |
-| `memory`      | _int_ or _string_ | `6144`     | Memory in MiB or string format (e.g. "6GiB") |
-| `diskSize`    | _string_     | `"100GiB"` | VM disk size                                 |
-| `port`        | _int_        | `31222`    | SSH port for VM access                       |
-| `speedFactor` | _int_        | `1`        | Speed factor for Nix build machine           |
+|Option|Type|Default|Description|
+|-|-|-|-|
+|`enable`|_bool_|`false`| Enable the service|
+|`allowUserSsh`|_bool_|`false`|Allow non-root users to SSH into the VM|
+|`cores`|_int_|`8`| CPU cores allocated to VM|
+|`debug`|_bool_|`false`|Enable debug logging for the VM|
+|`diskSize`|_string_|`"100GiB"`| VM disk size|
+|`extraConfig`|_module_|`{}`|Additional NixOS modules to include in the VM's system configuration|
+|`memory`|_int_ or _string_|`6144`| Memory in MiB or string format (e.g. "6GiB")|
+|`onDemand.enable`|_bool_|`false`|Enable on-demand activation of the VM|
+|`onDemand.ttl`|_int_|`180`|The number of minutes of inactivity which must pass before the VM shuts down|
+|`port`|_int_|`31222`| SSH port for VM access|
+|`rosetta`|_bool_|`true`|Enable Rosetta support for the VM|
+|`sharedDirectories`|_attrs of string_|`{}`|An attribute set of directories that will be shared with the VM as virtio-fs devices|
+|`speedFactor`|_int_|`1`| Speed factor for Nix build machine|
+|`supportDeterminateNix`|_bool_|`false`|Enable support for using Virby with Determinate Nix|
 
-### Other Settings
 
 **On-demand Activation**
 
@@ -124,6 +131,8 @@ If you prefer building the image locally, you can enable the `nix.linux-builder`
 
 **Custom NixOS Configuration**
 
+> [!Warning]
+> This option allows you to arbitrarily change the NixOS configuration, which could expose the VM to security risks.
 
 ```nix
 {
@@ -136,8 +145,6 @@ If you prefer building the image locally, you can enable the `nix.linux-builder`
   };
 }
 ```
-> [!Warning]
-> This option allows you to arbitrarily change the NixOS configuration, which could expose the VM to security risks.
 
 **Debug Options** (insecure, for troubleshooting only)
 
@@ -154,21 +161,12 @@ Virby integrates three components:
 
 - **nix-darwin Module** - Configures VM as a Nix build machine for host
 - **VM Image** - Minimal NixOS disk image configured for secure ssh access and build isolation
-- **VM Runner** - Python package managing VM lifecycle and SSH proxying
-
-**Build workflow:** Linux build requested → VM started (if needed) → Build on VM → Results copied to host → VM shutdown (after idle timeout)
+- **VM Runner** - Go package managing VM lifecycle and SSH proxying
 
 **Security model:**
 - VM doesn't accept remote connections as it binds to the loopback interface
 - SSH keys are generated and copied to the VM on first run.
 - `builder` user has minimal permissions, root access is restricted by default
-
-## Benchmarks
-
-| Test | Command | Mean&nbsp;[s] | Min&nbsp;[s] | Max&nbsp;[s] | Relative |
-|:-----|:--------|---------:|--------:|--------:|---------:|
-| Boot | `ssh virby-vm -- true` (triggers startup in on-demand mode) | 9.203&nbsp;±&nbsp;0.703 | 7.795 | 9.818 | 1.00 |
-| Build | `nix build --rebuild nixpkgs#hello` | 8.136 ±&nbsp;0.031 | 8.087 | 8.173 | 1.00 |
 
 ## Troubleshooting
 
