@@ -30,23 +30,12 @@
       packages =
         perDarwinSystem (pkgs: {
           default = self.packages.${pkgs.stdenv.hostPlatform.system}.vm-runner;
-          vm-runner = pkgs.python3Packages.callPackage ./pkgs/vm-runner { inherit _lib; };
+          vm-runner = pkgs.callPackage ./pkgs/vm-runner { };
         })
         // perLinuxSystem (pkgs: {
           default = self.packages.${pkgs.stdenv.hostPlatform.system}.vm-image;
           vm-image = pkgs.callPackage ./pkgs/vm-image { inherit _lib inputs lib; };
         });
-
-      apps = perDarwinSystem (pkgs: {
-        benchmark-vm = {
-          type = "app";
-          program = lib.getExe (pkgs.callPackage ./scripts/benchmark-vm { });
-        };
-        bump-version = {
-          type = "app";
-          program = lib.getExe (pkgs.callPackage ./scripts/bump-version { });
-        };
-      });
 
       devShells = perDarwinSystem (pkgs: {
         default = pkgs.mkShellNoCC {
