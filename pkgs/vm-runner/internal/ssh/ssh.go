@@ -1,49 +1,27 @@
 package ssh
 
 import (
-	"context"
 	"fmt"
+	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"time"
+
+	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/knownhosts"
 )
 
 type SSHConnectivityTester struct {
-	baseCommand []string
-	sshKeyPath  string
-	username    string
+	knownHostsFilePath string
+	sshKeyPath         string
+	username           string
 }
 
 func NewSSHConnectivityTester(workingDirectory string) *SSHConnectivityTester {
-	sshKeyPath := filepath.Join(workingDirectory, SSHUserPrivateKeyFileName)
-	knownHostsFilePath := filepath.Join(workingDirectory, SSHKnownHostsFileName)
-	baseCommand := []string{
-		"ssh",
-		"-o",
-		"BatchMode=yes",
-		"-o",
-		"LogLevel=ERROR",
-		"-o",
-		"PasswordAuthentication=no",
-		"-o",
-		"StrictHostKeyChecking=yes",
-		"-o",
-		fmt.Sprintf("UserKnownHostsFile=%s", knownHostsFilePath),
-		"-o",
-		fmt.Sprintf("HostKeyAlias=%s-key", VMHostName),
-		"-o",
-		"IdentitiesOnly=yes",
-		"-p",
-		"22",
-		"-i",
-		sshKeyPath,
-	}
-
 	return &SSHConnectivityTester{
-		baseCommand: baseCommand,
-		sshKeyPath:  sshKeyPath,
-		username:    VMUser,
+		knownHostsFilePath: filepath.Join(workingDirectory, SSHKnownHostsFileName),
+		sshKeyPath:         filepath.Join(workingDirectory, SSHUserPrivateKeyFileName),
+		username:           VMUser,
 	}
 }
 
@@ -56,17 +34,42 @@ func (t *SSHConnectivityTester) TestConnectivity(ipAddress string, timeout int) 
 		return false, err
 	}
 
-	command := append([]string{}, t.baseCommand...)
-	command = append(command, "-o", fmt.Sprintf("ConnectTimeout=%d", timeout), fmt.Sprintf("%s@%s", t.username, ipAddress), "true")
+	keyBytes, err := os.ReadFile(t.sshKeyPath)
+	if err != nil {
+		return false, fmt.Errorf("failed to read private key: %w", err)
+	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
-	defer cancel()
+	signer, err := ssh.ParsePrivateKey(keyBytes)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse private key: %w", err)
+	}
 
-	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
+	hostKeyCallback, err := knownhosts.New(t.knownHostsFilePath)
+	if err != nil {
+		return false, fmt.Errorf("failed to load known hosts file: %w", err)
+	}
 
-	if err := cmd.Run(); err != nil {
+	wrappedHostKeyCallback := func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+		alias := fmt.Sprintf("%s-key:22", VMHostName)
+		return hostKeyCallback(alias, remote, key)
+	}
+
+	config := &ssh.ClientConfig{
+		Auth: []ssh.AuthMethod{
+			ssh.PublicKeys(signer),
+		},
+		HostKeyCallback: wrappedHostKeyCallback,
+		Timeout:         time.Duration(timeout) * time.Second,
+		User:            t.username,
+	}
+
+	addr := net.JoinHostPort(ipAddress, "22")
+	client, err := ssh.Dial("tcp", addr, config)
+	if err != nil {
 		return false, nil
 	}
+
+	client.Close()
 
 	return true, nil
 }

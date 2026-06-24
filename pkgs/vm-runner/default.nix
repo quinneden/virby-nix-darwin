@@ -8,7 +8,7 @@ buildGoModule {
   name = "virby-vm-runner";
   src = ./.;
 
-  vendorHash = null;
+  vendorHash = "sha256-Ivlyju4bHiKAfCKAYUmmoQzChD6o1kHE7dSrFwz7aDU=";
 
   ldflags = [ "-X vm-runner/internal/vmprocess.vfkitBin=${lib.getExe vfkit}" ];
 
