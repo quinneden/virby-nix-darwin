@@ -347,22 +347,21 @@ in
 
       launchd.daemons = {
         ${daemonName} = {
-          path =
-            with pkgs;
-            [
-              coreutils
-              findutils
-              gnugrep
-              nix
-              openssh
-              self.packages.${pkgs.stdenv.hostPlatform.system}.vm-runner
-            ];
+          path = with pkgs; [
+            coreutils
+            findutils
+            gnugrep
+            nix
+            openssh
+            self.packages.${pkgs.stdenv.hostPlatform.system}.vm-runner
+          ];
           command = lib.getExe self.packages.${pkgs.stdenv.hostPlatform.system}.vm-runner;
 
           serviceConfig = {
             UserName = darwinUser;
             WorkingDirectory = workingDirectory;
             KeepAlive = !cfg.onDemand.enable;
+            StandardOutPath = "/tmp/${daemonName}.log";
 
             Sockets.Listener = {
               SockFamily = "IPv4";
@@ -373,8 +372,7 @@ in
             EnvironmentVariables = {
               VIRBY_VM_CONFIG_FILE = toString vmConfigJson;
             };
-          }
-          // lib.optionalAttrs cfg.debug { StandardOutPath = "/tmp/${daemonName}.log"; };
+          };
         };
       };
 
