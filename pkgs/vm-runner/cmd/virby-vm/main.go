@@ -1,23 +1,34 @@
 package main
 
 import (
-	"log"
+	"log/slog"
 	"os"
 	"vm-runner/internal/config"
 	"vm-runner/internal/runner"
 	"vm-runner/internal/signalmanager"
 )
 
-func run() int {
-	log.SetFlags(log.LstdFlags)
-	log.SetOutput(os.Stdout)
+func setupLogging(debug bool) {
+	logLevel := slog.LevelInfo
+	if debug {
+		logLevel = slog.LevelDebug
+	}
 
+	handler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel})
+	logger := slog.New(handler)
+
+	slog.SetDefault(logger)
+}
+
+func run() int {
 	configFilePath := os.Getenv("VIRBY_VM_CONFIG_FILE")
 	cfg, err := config.NewVMConfig(configFilePath)
 	if err != nil {
-		log.Print(err)
+		slog.Error("failed to get VM config", "error", err)
 		return 1
 	}
+
+	setupLogging(cfg.Debug)
 
 	sm := signalmanager.NewSignalManager()
 	sm.Setup()
@@ -25,7 +36,7 @@ func run() int {
 
 	r := runner.NewRunner(cfg, sm)
 	if err := r.Run(); err != nil {
-		log.Print(err)
+		slog.Error(err.Error())
 		return 1
 	}
 

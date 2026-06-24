@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	mrand "math/rand/v2"
 	"os"
 	"os/exec"
@@ -65,20 +65,20 @@ func consumeVMProcessOutput(stdout, stderr io.ReadCloser, ch chan struct{}) {
 
 	var wg sync.WaitGroup
 
-	readStream := func(stream io.ReadCloser, name string) {
+	readStream := func(stream io.ReadCloser) {
 		defer wg.Done()
 		sc := bufio.NewScanner(stream)
 		for sc.Scan() {
-			log.Printf("[%s] %s", name, sc.Text())
+			slog.Debug(sc.Text())
 		}
 		if err := sc.Err(); err != nil {
-			log.Printf("[%s] read error: %v", name, err)
+			slog.Error("failed to read stream", "error", err)
 		}
 	}
 
 	wg.Add(2)
-	go readStream(stdout, "stdout")
-	go readStream(stderr, "stderr")
+	go readStream(stdout)
+	go readStream(stderr)
 	wg.Wait()
 }
 
@@ -397,9 +397,9 @@ func (vp *VMProcess) monitorVM() {
 	}
 
 	if err != nil && !vp.shutdownRequested.Load() {
-		log.Printf("VM process died unexpectedly: %v", err)
+		slog.Error("VM process died unexpectedly", "error", err)
 	} else {
-		log.Print("VM shut down normally")
+		slog.Info("VM shut down normally")
 	}
 
 	if !vp.shutdownRequested.Load() {
@@ -425,14 +425,14 @@ func (vp *VMProcess) resetVMProcessState() {
 	}
 
 	vp.removePIDFile()
-	log.Print("Reset VM process state")
+	slog.Info("reset VM process state")
 }
 
 func (vp *VMProcess) getIPAddress() (string, error) {
 	interval := 100 * time.Millisecond
 	maxInterval := 2 * time.Second
 
-	log.Print("Discovering IP address...")
+	slog.Info("starting IP discovery")
 
 	startTime := time.Now()
 	for time.Since(startTime) < ipDiscoveryTimeout {
@@ -454,7 +454,7 @@ func (vp *VMProcess) getIPAddress() (string, error) {
 			vp.ipAddress = ipAddress
 			vp.mu.Unlock()
 
-			log.Printf("Found IP address '%s' for VM", ipAddress)
+			slog.Debug("IP address found", slog.String("ip_address", ipAddress))
 			return ipAddress, nil
 		}
 
@@ -470,13 +470,13 @@ func (vp *VMProcess) waitForSSH(ipAddress string, tester *ssh.SSHConnectivityTes
 	interval := 500 * time.Millisecond
 	maxInterval := 1 * time.Second
 
-	log.Printf("Waiting for SSH connectivity to %s", ipAddress)
+	slog.Info("waiting for SSH connectivity to VM")
 
 	startTime := time.Now()
 	for time.Since(startTime) < sshReadyTimeout {
 		ok, err := tester.TestConnectivity(ipAddress, 5)
 		if err != nil {
-			return fmt.Errorf("failed to test SSH connectivity: %w", err)
+			return fmt.Errorf("SSH connectivity test failed: %w", err)
 		}
 
 		if ok {
@@ -487,16 +487,16 @@ func (vp *VMProcess) waitForSSH(ipAddress string, tester *ssh.SSHConnectivityTes
 		interval = min(interval+increment, maxInterval)
 	}
 
-	return fmt.Errorf("failed while waiting for SSH connectivity: timeout exceeded")
+	return fmt.Errorf("SSH connectivity test failed: timeout exceeded")
 }
 
 func (vp *VMProcess) Start() error {
-	log.Print("Starting the VM...")
+	slog.Info("starting the VM")
 
 	vp.shutdownRequested.Store(false)
 
 	if err := vp.killOrphanedVfkitProcesses(); err != nil {
-		log.Printf("Error while killing orphaned vfkit process: %v", err)
+		slog.Error("failed to kill orphaned vfkit process", "error", err)
 	}
 	if err := vp.startVMProcess(); err != nil {
 		return err
@@ -521,7 +521,7 @@ func (vp *VMProcess) Start() error {
 }
 
 func (vp *VMProcess) Stop(timeout time.Duration) error {
-	log.Print("Stopping the VM...")
+	slog.Info("stopping the VM")
 
 	vp.shutdownRequested.Store(true)
 
@@ -535,9 +535,9 @@ func (vp *VMProcess) Stop(timeout time.Duration) error {
 
 		select {
 		case <-exitCh:
-			log.Print("VM stopped gracefully")
+			slog.Info("VM stopped gracefully")
 		case <-time.After(timeout):
-			log.Print("VM could not stop gracefully, killing process...")
+			slog.Info("unable to stop VM gracefully, killing process instead", "reason", "timeout exceeded")
 			cmd.Process.Kill()
 			<-exitCh
 		}
@@ -548,7 +548,7 @@ func (vp *VMProcess) Stop(timeout time.Duration) error {
 }
 
 func (vp *VMProcess) Pause() error {
-	log.Print("Pausing the VM...")
+	slog.Info("pausing the VM")
 
 	if !vp.IsRunning() {
 		return fmt.Errorf("failed to pause VM: process is not running")
@@ -563,12 +563,12 @@ func (vp *VMProcess) Pause() error {
 		return fmt.Errorf("failed to pause VM: %w", err)
 	}
 
-	log.Print("VM paused")
+	slog.Info("VM paused")
 	return nil
 }
 
 func (vp *VMProcess) Resume() error {
-	log.Print("Resuming the VM...")
+	slog.Info("resuming the VM")
 
 	if !vp.IsRunning() {
 		return fmt.Errorf("failed to resume VM: process is not running")
@@ -583,7 +583,7 @@ func (vp *VMProcess) Resume() error {
 		return fmt.Errorf("failed to resume VM: %w", err)
 	}
 
-	log.Print("VM resumed")
+	slog.Info("VM resumed")
 	return nil
 }
 
@@ -591,7 +591,7 @@ func (vp *VMProcess) PauseOrStop() error {
 	if err := vp.Pause(); err == nil {
 		return nil
 	}
-	log.Print("VM cannot be paused, stopping instead...")
+	slog.Info("VM cannot be paused, stopping instead")
 
 	stopTimeout := 30 * time.Second
 	if err := vp.Stop(stopTimeout); err != nil {

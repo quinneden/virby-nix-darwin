@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -60,7 +60,7 @@ func (r *Runner) scheduleShutdownCheck(ctx context.Context) error {
 	timer := time.NewTimer(ttl)
 	defer timer.Stop()
 
-	log.Printf("Shutdown check in %d seconds", r.config.TTL)
+	slog.Info("scheduled shutdown check", slog.Int("seconds", r.config.TTL))
 
 	select {
 	case <-timer.C:
@@ -82,7 +82,8 @@ func (r *Runner) scheduleShutdownCheck(ctx context.Context) error {
 }
 
 func (r *Runner) proxyConnection(clientConn net.Conn) {
-	r.activeConnections.Add(1)
+	active := r.activeConnections.Add(1)
+	slog.Info("new connection", slog.Int("active_connections", int(active)))
 
 	r.mu.Lock()
 	r.lastConnectionTime = time.Now()
@@ -93,8 +94,9 @@ func (r *Runner) proxyConnection(clientConn net.Conn) {
 	r.mu.Unlock()
 
 	defer func() {
-		r.activeConnections.Add(-1)
+		active = r.activeConnections.Add(-1)
 		clientConn.Close()
+		slog.Info("connection closed", slog.Int("active_connections", int(active)))
 		if r.config.OnDemand {
 			ctx, cancelCtx := context.WithCancel(context.Background())
 			r.mu.Lock()
@@ -105,19 +107,19 @@ func (r *Runner) proxyConnection(clientConn net.Conn) {
 	}()
 
 	if r.shutdownRequested.Load() || r.signalManager.IsShutdownRequested() {
-		log.Print("[proxy] shutdown requested, rejecting connection")
+		slog.Info("shutdown requested, rejecting connection")
 		return
 	}
 
 	if err := r.ensureVMReady(); err != nil {
-		log.Printf("[proxy] %v", err)
+		slog.Error("VM readiness check failed", "error", err)
 		return
 	}
 
 	hostPort := net.JoinHostPort(r.vmProcess.IPAddress(), "22")
 	vmConn, err := net.Dial("tcp", hostPort)
 	if err != nil {
-		log.Printf("[proxy]: %v", err)
+		slog.Error("failed to connect to VM", "error", err)
 		return
 	}
 
@@ -153,10 +155,10 @@ func (r *Runner) handleActivationConnections() error {
 		conn, err := r.activationSocket.Accept()
 		if err != nil {
 			if r.signalManager.IsShutdownRequested() {
-				log.Print("Stopping connection handler: shutdown requested")
+				slog.Info("stopping connection handler", "reason", "shutdown requested")
 				return nil
 			}
-			log.Printf("Error while handling client connection: %v", err)
+			slog.Error("failed handling client connection", "error", err)
 		} else {
 			go r.proxyConnection(conn)
 		}
@@ -167,7 +169,7 @@ func (r *Runner) Run() error {
 	defer r.vmProcess.Stop(30 * time.Second)
 
 	if r.signalManager.IsShutdownRequested() {
-		log.Print("Shutdown already requested, exiting immediately")
+		slog.Info("stopping signal manager", "reason", "shutdown requested")
 		return nil
 	}
 
@@ -178,7 +180,6 @@ func (r *Runner) Run() error {
 	}
 
 	if !r.config.OnDemand {
-		log.Print("Starting VM...")
 		if err := r.vmProcess.Start(); err != nil {
 			return err
 		}

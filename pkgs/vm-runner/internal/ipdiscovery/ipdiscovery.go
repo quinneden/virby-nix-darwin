@@ -120,7 +120,6 @@ func (d *IPDiscovery) DiscoverIP() (string, error) {
 
 	for _, entry := range entries {
 		if entry.hwAddress == d.macAddress {
-			fmt.Printf("found IP %s for MAC %s", entry.ipAddress, d.macAddress)
 			return entry.ipAddress, nil
 		}
 	}
