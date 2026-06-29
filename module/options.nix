@@ -37,18 +37,6 @@
       '';
     };
 
-    supportDeterminateNix = lib.mkOption {
-      type = lib.types.bool;
-      default = false;
-      description = ''
-        Whether to enable support for using Virby with Determinate Nix.
-
-        When enabled, the config will set `determinateNix.buildMachines` instead of
-        `nix.buildMachines`. This requires that the Determinate module for Nix-darwin is already
-        imported in your configuration and will throw an error otherwise.
-      '';
-    };
-
     diskSize = lib.mkOption {
       type = lib.types.str;
       default = "100GiB";
@@ -170,6 +158,18 @@
 
         This is an arbitrary integer that indicates the speed of this builder, relative to other
         builders. Higher is faster.
+      '';
+    };
+
+    supportDeterminateNix = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        Whether to enable support for using Virby with Determinate Nix.
+
+        When enabled, the config will set `determinateNix.buildMachines` instead of
+        `nix.buildMachines`. This requires that the Determinate module for Nix-darwin is already
+        imported in your configuration and will throw an error otherwise.
       '';
     };
   };
