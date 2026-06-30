@@ -7,13 +7,6 @@ let
   RED = "${ESC}[31m";
   RESET = "${ESC}[0m";
 
-  doppelganger =
-    f:
-    let
-      swap = f: lib.replaceStrings [ "darwin" ] [ "linux" ] f;
-    in
-    if (lib.isList f) then map (l: swap l) f else swap f;
-
   logError = "printf \"[$(date '+%Y-%m-%d %H:%M:%S')] ${RED}ERROR:${RESET} %s\n\"";
   logInfo = "printf \"[$(date '+%Y-%m-%d %H:%M:%S')] ${GREEN}INFO:${RESET} %s\n\"";
 
@@ -85,7 +78,6 @@ in
 
 {
   inherit
-    doppelganger
     logError
     logInfo
     parseMemoryMiB

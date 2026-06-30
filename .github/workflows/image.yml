@@ -1,6 +1,4 @@
-# Build and cache the VM disk images for both architectures
-
-name: Build and Cache VM Images
+name: Build and cache VM image
 
 on:
   push:
@@ -32,19 +30,9 @@ on:
 
 jobs:
   build:
-    name: packages.${{ matrix.arch }}.vm-image
+    name: packages.aarch64-linux.vm-image
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
-    strategy:
-      matrix:
-        include:
-          - arch: aarch64-linux
-            runner: ubuntu-24.04-arm
-          - arch: x86_64-linux
-            runner: ubuntu-latest
-      fail-fast: false
-
-    runs-on: ${{ matrix.runner }}
-
+    runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v6
 
@@ -52,7 +40,7 @@ jobs:
         uses: cachix/install-nix-action@v31
         with:
           enable_kvm: true
-          extra_nix_config: "system-features = benchmark big-parallel kvm nixos-test uid-range"
+          extra_nix_config: "system-features = kvm"
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Cachix
@@ -62,4 +50,4 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Nix build
-        run: nix build -L .#packages.${{ matrix.arch }}.vm-image
+        run: nix build -L .#packages.aarch64-linux.vm-image

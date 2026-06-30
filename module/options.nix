@@ -143,10 +143,9 @@
       description = ''
         Whether to enable Rosetta support for the VM.
 
-        This is only supported on aarch64-darwin systems and allows the VM to build x86_64-linux
-        packages using Rosetta translation. It is recommended to only enable this option if you
-        need that functionality, as Rosetta causes a slight performance decrease in VMs when
-        enabled, even when it's not being utilized.
+        This allows the VM to build x86_64-linux packages using Rosetta translation. It is
+        recommended to only enable this option if you need that functionality, as Rosetta causes a slight
+        performance decrease in VMs when enabled, even when it's not being utilized.
       '';
     };
 

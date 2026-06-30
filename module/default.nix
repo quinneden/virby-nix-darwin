@@ -24,7 +24,6 @@ let
     ;
 
   inherit (_lib.helpers)
-    doppelganger
     logError
     logInfo
     parseMemoryMiB
@@ -45,7 +44,7 @@ let
     ]
   );
 
-  linuxSystem = doppelganger pkgs.stdenv.hostPlatform.system;
+  linuxSystem = builtins.replaceStrings [ "darwin" ] [ "linux" ] pkgs.stdenv.hostPlatform.system;
 
   imageWithFinalConfig = self.packages.${linuxSystem}.vm-image.override {
     inherit (cfg)

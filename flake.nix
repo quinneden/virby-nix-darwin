@@ -12,13 +12,16 @@
       inherit (nixpkgs) lib;
       _lib = import ./lib { inherit lib; };
 
-      darwinSystems = lib.systems.doubles.darwin;
-      linuxSystems = _lib.helpers.doppelganger darwinSystems;
+      darwinSystem = "aarch64-darwin";
+      linuxSystem = "aarch64-linux";
+      systems = [
+        darwinSystem
+        linuxSystem
+      ];
 
-      pkgsFor = systems: f: lib.genAttrs systems (system: f (import nixpkgs { inherit system; }));
-
-      perDarwinSystem = pkgsFor darwinSystems;
-      perLinuxSystem = pkgsFor linuxSystems;
+      forSystem = lib.genAttrs systems (
+        system: (f: { ${system} = f (import nixpkgs { inherit system; }); })
+      );
     in
 
     {
@@ -28,23 +31,23 @@
       };
 
       packages =
-        perDarwinSystem (pkgs: {
+        forSystem.aarch64-darwin (pkgs: {
           default = self.packages.${pkgs.stdenv.hostPlatform.system}.vm-runner;
           vm-runner = pkgs.callPackage ./pkgs/vm-runner { };
         })
-        // perLinuxSystem (pkgs: {
+        // forSystem.aarch64-linux (pkgs: {
           default = self.packages.${pkgs.stdenv.hostPlatform.system}.vm-image;
           vm-image = pkgs.callPackage ./pkgs/vm-image { inherit _lib inputs lib; };
         });
 
-      devShells = perDarwinSystem (pkgs: {
+      devShells = forSystem.aarch64-darwin (pkgs: {
         default = pkgs.mkShellNoCC {
           name = "virby-dev";
           packages = [ pkgs.vfkit ];
         };
       });
 
-      formatter = perDarwinSystem (
+      formatter = forSystem.aarch64-darwin (
         pkgs: pkgs.nixfmt-tree.override { settings.formatter.nixfmt.options = [ "--strict" ]; }
       );
     };

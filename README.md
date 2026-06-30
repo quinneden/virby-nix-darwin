@@ -123,7 +123,6 @@ If you prefer building the image locally, you can enable the `nix.linux-builder`
 **Rosetta Support**
 
 ```nix
-# Requires `aarch64-darwin` host
 {
   services.virby.rosetta = true;
 }
