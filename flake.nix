@@ -59,6 +59,9 @@
             install -Dm444 edk2/KRUN_EFI.silent.fd $out/share/krunkit/KRUN_EFI.silent.fd
           '';
         });
+
+        # FIXME: remove when https://github.com/NixOS/nixpkgs/pull/495633 is merged
+        vmnet-helper = final.callPackage ./pkgs/vmnet-helper { };
       };
 
       packages =
