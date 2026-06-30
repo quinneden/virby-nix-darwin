@@ -26,13 +26,13 @@ const (
 	VMStateStopping  VMState = "VirtualMachineStateStopping"
 )
 
-type VfkitAPIClient struct {
+type APIClient struct {
 	port           int
 	isRunningCheck func() bool
 	client         *http.Client
 }
 
-func NewVfkitAPIClient(port int, isRunningCheck func() bool) *VfkitAPIClient {
+func NewAPIClient(port int, isRunningCheck func() bool) *APIClient {
 	client := &http.Client{
 		Timeout: 5 * time.Second,
 		Transport: &http.Transport{
@@ -41,14 +41,14 @@ func NewVfkitAPIClient(port int, isRunningCheck func() bool) *VfkitAPIClient {
 		},
 	}
 
-	return &VfkitAPIClient{
+	return &APIClient{
 		port:           port,
 		isRunningCheck: isRunningCheck,
 		client:         client,
 	}
 }
 
-func (c *VfkitAPIClient) callAPI(endpoint string, method string, data Data) (Data, error) {
+func (c *APIClient) callAPI(endpoint string, method string, data Data) (Data, error) {
 	if c.isRunningCheck != nil && !c.isRunningCheck() {
 		return nil, fmt.Errorf("the virtual machine is not running")
 	}
@@ -110,15 +110,15 @@ func (c *VfkitAPIClient) callAPI(endpoint string, method string, data Data) (Dat
 	return nil, fmt.Errorf("request failed after %d attempts", maxRetries+1)
 }
 
-func (c *VfkitAPIClient) Close() {
+func (c *APIClient) Close() {
 	c.client.CloseIdleConnections()
 	c.client = nil
 }
 
-func (c *VfkitAPIClient) Get(endpoint string) (Data, error) {
+func (c *APIClient) Get(endpoint string) (Data, error) {
 	return c.callAPI(endpoint, "GET", nil)
 }
 
-func (c *VfkitAPIClient) Post(endpoint string, data Data) (Data, error) {
+func (c *APIClient) Post(endpoint string, data Data) (Data, error) {
 	return c.callAPI(endpoint, "POST", data)
 }

@@ -36,7 +36,7 @@ const (
 var vfkitBin = "vfkit"
 
 type VMProcess struct {
-	apiClient         *api.VfkitAPIClient
+	apiClient         *api.APIClient
 	apiPort           int
 	circuitBreaker    *circuitbreaker.CircuitBreaker
 	config            *config.VMConfig
@@ -95,7 +95,7 @@ func NewVMProcess(config *config.VMConfig) *VMProcess {
 		pidFile:        filepath.Join(config.WorkingDirectory, "vfkit.pid"),
 	}
 
-	vp.apiClient = api.NewVfkitAPIClient(apiPort, vp.IsRunning)
+	vp.apiClient = api.NewAPIClient(apiPort, vp.IsRunning)
 
 	return vp
 }
