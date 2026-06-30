@@ -8,19 +8,23 @@ import (
 )
 
 type vmConfigJSON struct {
-	Cores      int               `json:"cores"`
-	Debug      bool              `json:"debug"`
-	Memory     int               `json:"memory"`
-	OnDemand   bool              `json:"on-demand"`
-	Port       int               `json:"port"`
-	Rosetta    bool              `json:"rosetta"`
-	SharedDirs map[string]string `json:"shared-dirs"`
-	TTL        int               `json:"ttl"`
+	Cores         int               `json:"cores"`
+	Debug         bool              `json:"debug"`
+	Driver        string            `json:"driver"`
+	DriverPackage string            `json:"driver-package"`
+	Memory        int               `json:"memory"`
+	OnDemand      bool              `json:"on-demand"`
+	Port          int               `json:"port"`
+	Rosetta       bool              `json:"rosetta"`
+	SharedDirs    map[string]string `json:"shared-dirs"`
+	TTL           int               `json:"ttl"`
 }
 
 type VMConfig struct {
 	Cores            int
 	Debug            bool
+	Driver           string
+	DriverPackage    string
 	Memory           int
 	OnDemand         bool
 	Port             int
@@ -98,6 +102,8 @@ func NewVMConfig(configFilePath string) (*VMConfig, error) {
 	return &VMConfig{
 		Cores:            raw.Cores,
 		Debug:            raw.Debug,
+		Driver:           raw.Driver,
+		DriverPackage:    raw.DriverPackage,
 		Memory:           raw.Memory,
 		OnDemand:         raw.OnDemand,
 		Port:             raw.Port,
