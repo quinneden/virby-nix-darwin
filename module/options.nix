@@ -1,4 +1,13 @@
-{ lib, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
+
+let
+  cfg = config.services.virby;
+in
 
 {
   options.services.virby = {
@@ -44,6 +53,30 @@
         The size of the disk image for the VM.
 
         The option value must be a string with a number, followed by the suffix "GiB".
+      '';
+    };
+
+    driver = lib.mkOption {
+      type = lib.types.enum [
+        "krunkit"
+        "vfkit"
+      ];
+      default = "vfkit";
+      description = ''
+        The virtualization driver used to run the VM.
+
+        Must be either "krunkit" or "vfkit".
+      '';
+    };
+
+    driverPackage = lib.mkOption {
+      type = lib.types.package;
+      readOnly = true;
+      default = pkgs.${cfg.driver};
+      description = ''
+        Read-only option exposing the virtualization driver package.
+
+        To specify which driver to use for the VM, use the `services.virby.driver` option instead.
       '';
     };
 
