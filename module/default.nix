@@ -383,12 +383,7 @@ in
       system.build.virbyImage = imageWithFinalConfig;
     })
 
-    (lib.mkIf (!cfg.supportDeterminateNix) {
-      nix = {
-        inherit buildMachines distributedBuilds;
-        settings.builders-use-substitutes = lib.mkDefault true;
-      };
-    })
+    (lib.mkIf (!cfg.supportDeterminateNix) { nix = { inherit buildMachines distributedBuilds; }; })
 
     (lib.mkIf cfg.supportDeterminateNix (
       {
@@ -407,10 +402,7 @@ in
         ];
       }
       // lib.optionalAttrs (options ? determinateNix) {
-        determinateNix = {
-          inherit buildMachines distributedBuilds;
-          customSettings.builders-use-substitutes = lib.mkDefault true;
-        };
+        determinateNix = { inherit buildMachines distributedBuilds; };
       }
     ))
   ];
