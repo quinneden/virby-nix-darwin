@@ -1,6 +1,6 @@
 # Virby - Linux Builder for Nix-darwin
 
-Virby is a module for [nix-darwin](https://github.com/nix-darwin/nix-darwin) that configures a lightweight, [vfkit](https://github.com/crc-org/vfkit)-based linux VM as a remote build machine for nix, allowing linux packages to be built on macOS. This project is modeled after [nix-rosetta-builder](https://github.com/cpick/nix-rosetta-builder), which provides a similar service, using lima to manage the VM. Some parts of the code in this repository are directly borrowed and adapted from that project.
+Virby is a module for [nix-darwin](https://github.com/nix-darwin/nix-darwin) that configures a lightweight linux VM as a remote build machine for nix, allowing linux packages to be built on macOS. This project is modeled after [nix-rosetta-builder](https://github.com/cpick/nix-rosetta-builder), which provides a similar service, using lima to manage the VM. Some parts of the code in this repository are directly borrowed and adapted from that project.
 
 ## Quick Start
 
@@ -99,6 +99,7 @@ If you prefer building the image locally, you can enable the `nix.linux-builder`
 |`allowUserSsh`|_bool_|`false`|Allow non-root users to SSH into the VM|
 |`cores`|_int_|`8`| CPU cores allocated to VM|
 |`debug`|_bool_|`false`|Enable debug logging for the VM|
+|`driver`|_string ("vfkit" or "krunkit")_|`"vfkit"`|The virtualization driver used to run the VM|
 |`diskSize`|_string_|`"100GiB"`| VM disk size|
 |`extraConfig`|_module_|`{}`|Additional NixOS modules to include in the VM's system configuration|
 |`memory`|_int_ or _string_|`6144`| Memory in MiB or string format (e.g. "6GiB")|
@@ -110,6 +111,17 @@ If you prefer building the image locally, you can enable the `nix.linux-builder`
 |`speedFactor`|_int_|`1`| Speed factor for Nix build machine|
 |`supportDeterminateNix`|_bool_|`false`|Enable support for using Virby with Determinate Nix|
 
+**Use krunkit instead of vfkit**
+
+By default, `vfkit` is used to run the VM. Optionally, you can configure Virby to use `krunkit` instead:
+
+```nix
+{
+  services.virby.driver = "krunkit";
+}
+```
+
+Unlike `vfkit`, `krunkit` does not support NAT networking, so the network is proxied via `vmnet-helper`.
 
 **On-demand Activation**
 
@@ -193,7 +205,7 @@ ssh virby-vm
 ## Acknowledgments
 
 - Inspired by [nix-rosetta-builder](https://github.com/cpick/nix-rosetta-builder)
-- Uses [vfkit](https://github.com/crc-org/vfkit)
+- Integrates [vfkit](https://github.com/crc-org/vfkit), [krunkit](https://github.com/libkrun/krunkit), and [vmnet-helper](https://github.com/nirs/vmnet-helper)
 
 ---
 
