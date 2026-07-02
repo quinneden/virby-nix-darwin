@@ -8,32 +8,34 @@ import (
 )
 
 type vmConfigJSON struct {
-	Cores          int               `json:"cores"`
-	Debug          bool              `json:"debug"`
-	Driver         string            `json:"driver"`
-	DriverBin      string            `json:"driver-bin"`
-	Memory         int               `json:"memory"`
-	OnDemand       bool              `json:"on-demand"`
-	Port           int               `json:"port"`
-	Rosetta        bool              `json:"rosetta"`
-	SharedDirs     map[string]string `json:"shared-dirs"`
-	TTL            int               `json:"ttl"`
-	VMNetHelperBin string            `json:"vmnet-helper-bin"`
+	Cores                int               `json:"cores"`
+	Debug                bool              `json:"debug"`
+	Driver               string            `json:"driver"`
+	DriverBin            string            `json:"driver-bin"`
+	Memory               int               `json:"memory"`
+	NestedVirtualization bool              `json:"nested-virtualization"`
+	OnDemand             bool              `json:"on-demand"`
+	Port                 int               `json:"port"`
+	Rosetta              bool              `json:"rosetta"`
+	SharedDirs           map[string]string `json:"shared-dirs"`
+	TTL                  int               `json:"ttl"`
+	VMNetHelperBin       string            `json:"vmnet-helper-bin"`
 }
 
 type VMConfig struct {
-	Cores            int
-	Debug            bool
-	Driver           string
-	DriverBin        string
-	Memory           int
-	OnDemand         bool
-	Port             int
-	Rosetta          bool
-	SharedDirs       map[string]string
-	TTL              int
-	VMNetHelperBin   string
-	WorkingDirectory string
+	Cores                int
+	Debug                bool
+	Driver               string
+	DriverBin            string
+	Memory               int
+	NestedVirtualization bool
+	OnDemand             bool
+	Port                 int
+	Rosetta              bool
+	SharedDirs           map[string]string
+	TTL                  int
+	VMNetHelperBin       string
+	WorkingDirectory     string
 }
 
 func NewVMConfig(configFilePath string) (*VMConfig, error) {
@@ -118,17 +120,18 @@ func NewVMConfig(configFilePath string) (*VMConfig, error) {
 	}
 
 	return &VMConfig{
-		Cores:            raw.Cores,
-		Debug:            raw.Debug,
-		Driver:           raw.Driver,
-		DriverBin:        raw.DriverBin,
-		Memory:           raw.Memory,
-		OnDemand:         raw.OnDemand,
-		Port:             raw.Port,
-		Rosetta:          raw.Rosetta,
-		SharedDirs:       resolvedSharedDirs,
-		TTL:              raw.TTL,
-		VMNetHelperBin:   raw.VMNetHelperBin,
-		WorkingDirectory: workingDirectoryAbs,
+		Cores:                raw.Cores,
+		Debug:                raw.Debug,
+		Driver:               raw.Driver,
+		DriverBin:            raw.DriverBin,
+		Memory:               raw.Memory,
+		NestedVirtualization: raw.NestedVirtualization,
+		OnDemand:             raw.OnDemand,
+		Port:                 raw.Port,
+		Rosetta:              raw.Rosetta,
+		SharedDirs:           resolvedSharedDirs,
+		TTL:                  raw.TTL,
+		VMNetHelperBin:       raw.VMNetHelperBin,
+		WorkingDirectory:     workingDirectoryAbs,
 	}, nil
 }

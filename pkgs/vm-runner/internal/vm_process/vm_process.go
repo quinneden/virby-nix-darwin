@@ -116,7 +116,7 @@ func (vp *VMProcess) IPAddress() string {
 	return vp.ipAddress
 }
 
-func (vp *VMProcess) buildDriverCommand() []string {
+func (vp *VMProcess) buildDriverCommand() ([]string, error) {
 	diffDiskPath := filepath.Join(vp.config.WorkingDirectory, diffDiskFileName)
 	efiStorePath := filepath.Join(vp.config.WorkingDirectory, efiVariableStoreFileName)
 	serialLogFilePath := "/dev/null"
@@ -149,6 +149,19 @@ func (vp *VMProcess) buildDriverCommand() []string {
 		)
 	}
 
+	if vp.config.NestedVirtualization {
+		cpu, err := syscall.Sysctl("machdep.cpu.brand_string")
+		if err != nil {
+			return nil, fmt.Errorf("failed to get CPU brand string: %w", err)
+		}
+
+		if strings.Contains(cpu, "M1") || strings.Contains(cpu, "M2") {
+			slog.Warn("nested virtualization is not supported, ignoring '--nested' flag")
+		} else {
+			cmd = append(cmd, "--nested")
+		}
+	}
+
 	if vp.config.Rosetta {
 		cmd = append(cmd, "--device", "rosetta,mountTag=rosetta")
 	}
@@ -157,7 +170,7 @@ func (vp *VMProcess) buildDriverCommand() []string {
 		cmd = append(cmd, "--device", fmt.Sprintf("virtio-fs,sharedDir=%s,mountTag=%s", path, tag))
 	}
 
-	return cmd
+	return cmd, nil
 }
 
 func (vp *VMProcess) getStateInfoRaw() (api.Data, error) {
@@ -327,7 +340,11 @@ func (vp *VMProcess) startVMProcess() error {
 		return fmt.Errorf("VM process is already running")
 	}
 
-	driverCommand := vp.buildDriverCommand()
+	driverCommand, err := vp.buildDriverCommand()
+	if err != nil {
+		return err
+	}
+
 	cmd := exec.Command(driverCommand[0], driverCommand[1:]...)
 	cmd.Dir = vp.config.WorkingDirectory
 

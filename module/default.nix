@@ -78,6 +78,7 @@ let
       driver = cfg.driver;
       driver-bin = lib.getExe cfg.driverPackage;
       memory = parseMemoryMiB cfg.memory;
+      nested-virtualization = cfg.nestedVirtualization;
       on-demand = cfg.onDemand.enable;
       port = cfg.port;
       rosetta = cfg.rosetta;
