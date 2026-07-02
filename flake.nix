@@ -2,7 +2,7 @@
   description = "A {krun|vf}kit-based linux builder for Nix-darwin";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
+    nixpkgs.url = "github:nixos/nixpkgs?ref=nixpkgs-unstable";
   };
 
   outputs =
