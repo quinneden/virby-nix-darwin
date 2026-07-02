@@ -1,35 +1,4 @@
-# Python
-*.egg-info/
-*.test.json
-.*_cache/
-.basedpyright/
-.coverage
-.mypy_cache/
-.pytest_cache/
-.venv/
-__pycache__/
-dist/
-
-# Nix
-result/
-
-# Testing
-.env
-benchmark-results/
-test/
-virby-vm-benchmark-*
-
-# Misc
-*.bak
-*.bck
 .direnv/
 .DS_Store
-.rules
 .zed/
-
-# Agent related
-.claude/
-.context/
-.rules
-CLAUDE.md
-GEMINI.md
+result*
