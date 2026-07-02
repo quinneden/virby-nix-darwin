@@ -111,6 +111,18 @@ in
       '';
     };
 
+    nestedVirtualization = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        Whether to enable nested virtualization for the driver.
+
+        Nested virtualization requires an M3 or later CPU and macOS 15+. Since Nix lacks the ability to
+        check the CPU version, the vm-runner will check at runtime. If the CPU is not compatible, vm-runner
+        will print a warning in the log file and ignore the option.
+      '';
+    };
+
     onDemand = lib.mkOption {
       type =
         with lib.types;
