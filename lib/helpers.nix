@@ -55,25 +55,6 @@ let
       echo -e "${RED}[virby]${RESET} $*" >&2
     }
   '';
-
-  toScreamingSnakeCase =
-    with lib;
-    s:
-    let
-      isUpper = c: match "[A-Z]" c != null;
-      chars = stringToCharacters s;
-    in
-    concatStrings (
-      map (
-        c:
-        if (isUpper c && c != elemAt chars 0) then
-          "_" + c
-        else if c == "-" then
-          "_"
-        else
-          toUpper c
-      ) chars
-    );
 in
 
 {
@@ -82,6 +63,5 @@ in
     logInfo
     parseMemoryMiB
     setupLogFunctions
-    toScreamingSnakeCase
     ;
 }
