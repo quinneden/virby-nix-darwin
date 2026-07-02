@@ -76,13 +76,14 @@ let
       cores = cfg.cores;
       debug = cfg.debug;
       driver = cfg.driver;
-      driver-package = cfg.driverPackage;
+      driver-bin = lib.getExe cfg.driverPackage;
       memory = parseMemoryMiB cfg.memory;
       on-demand = cfg.onDemand.enable;
       port = cfg.port;
       rosetta = cfg.rosetta;
       shared-dirs = cfg.sharedDirectories;
       ttl = cfg.onDemand.ttl * 60;
+      vmnet-helper-bin = lib.optionalString (cfg.driver == "krunkit") (lib.getExe pkgs.vmnet-helper);
     }
   );
 

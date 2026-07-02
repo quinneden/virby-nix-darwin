@@ -22,6 +22,7 @@ import (
 	"vm-runner/internal/config"
 	"vm-runner/internal/ipdiscovery"
 	"vm-runner/internal/ssh"
+	"vm-runner/internal/vmnethelper"
 )
 
 type VMProcessState string
@@ -33,12 +34,11 @@ const (
 	VMProcessStateUnknown VMProcessState = "unknown"
 )
 
-var vfkitBin = "vfkit"
-
 type VMProcess struct {
 	apiClient         *api.APIClient
 	apiPort           int
 	circuitBreaker    *circuitbreaker.CircuitBreaker
+	command           *exec.Cmd
 	config            *config.VMConfig
 	ipAddress         string
 	ipDiscovery       *ipdiscovery.IPDiscovery
@@ -48,7 +48,7 @@ type VMProcess struct {
 	pidFile           string
 	processExitCh     chan struct{}
 	shutdownRequested atomic.Bool
-	command           *exec.Cmd
+	vmnetHelper       *vmnethelper.VMNetHelper
 }
 
 func generateMacAddress() string {
@@ -82,20 +82,24 @@ func consumeVMProcessOutput(stdout, stderr io.ReadCloser, ch chan struct{}) {
 	wg.Wait()
 }
 
-func NewVMProcess(config *config.VMConfig) *VMProcess {
-	apiPort := config.Port + 1
+func NewVMProcess(cfg *config.VMConfig) *VMProcess {
+	apiPort := cfg.Port + 1
 	macAddress := generateMacAddress()
 
 	vp := &VMProcess{
 		apiPort:        apiPort,
 		circuitBreaker: circuitbreaker.NewCircuitBreaker(3, 10*time.Second),
-		config:         config,
+		config:         cfg,
 		ipDiscovery:    ipdiscovery.NewIPDiscovery(macAddress, ""),
 		macAddress:     macAddress,
-		pidFile:        filepath.Join(config.WorkingDirectory, "vfkit.pid"),
+		pidFile:        filepath.Join(cfg.WorkingDirectory, "vm.pid"),
 	}
 
 	vp.apiClient = api.NewAPIClient(apiPort, vp.IsRunning)
+
+	if vp.config.Driver == config.DriverKrunkit {
+		vp.vmnetHelper = vmnethelper.NewVMNetHelper(vp.config.VMNetHelperBin)
+	}
 
 	return vp
 }
@@ -112,7 +116,7 @@ func (vp *VMProcess) IPAddress() string {
 	return vp.ipAddress
 }
 
-func (vp *VMProcess) buildVfkitCommand() []string {
+func (vp *VMProcess) buildDriverCommand() []string {
 	diffDiskPath := filepath.Join(vp.config.WorkingDirectory, diffDiskFileName)
 	efiStorePath := filepath.Join(vp.config.WorkingDirectory, efiVariableStoreFileName)
 	serialLogFilePath := "/dev/null"
@@ -123,27 +127,26 @@ func (vp *VMProcess) buildVfkitCommand() []string {
 	}
 
 	cmd := []string{
-		vfkitBin,
-		"--cpus",
-		fmt.Sprintf("%d", vp.config.Cores),
-		"--memory",
-		fmt.Sprintf("%d", vp.config.Memory),
-		"--bootloader",
-		fmt.Sprintf("efi,variable-store=%s,create", efiStorePath),
-		"--device",
-		fmt.Sprintf("virtio-blk,path=%s", diffDiskPath),
-		"--device",
-		fmt.Sprintf("virtio-fs,sharedDir=%s,mountTag=sshd-keys", sshdKeysDirPath),
-		"--device",
-		fmt.Sprintf("virtio-net,nat,mac=%s", vp.macAddress),
-		"--device",
-		fmt.Sprintf("virtio-serial,logFilePath=%s", serialLogFilePath),
-		"--restful-uri",
-		fmt.Sprintf("tcp://localhost:%d", vp.apiPort),
-		"--device",
-		"virtio-rng",
-		"--device",
-		"virtio-balloon",
+		vp.config.DriverBin,
+		"--cpus", fmt.Sprintf("%d", vp.config.Cores),
+		"--memory", fmt.Sprintf("%d", vp.config.Memory),
+		"--bootloader", fmt.Sprintf("efi,variable-store=%s,create", efiStorePath),
+		"--device", fmt.Sprintf("virtio-blk,path=%s", diffDiskPath),
+		"--device", fmt.Sprintf("virtio-fs,sharedDir=%s,mountTag=sshd-keys", sshdKeysDirPath),
+		"--device", fmt.Sprintf("virtio-serial,logFilePath=%s", serialLogFilePath),
+		"--restful-uri", fmt.Sprintf("tcp://localhost:%d", vp.apiPort),
+		"--device", "virtio-rng",
+	}
+
+	if vp.vmnetHelper != nil {
+		cmd = append(cmd,
+			"--device", fmt.Sprintf("virtio-net,type=unixgram,fd=3,mac=%s,offloading=on", vp.macAddress),
+		)
+	} else {
+		cmd = append(cmd,
+			"--device", fmt.Sprintf("virtio-net,nat,mac=%s", vp.macAddress),
+			"--device", "virtio-balloon",
+		)
 	}
 
 	if vp.config.Rosetta {
@@ -288,7 +291,7 @@ func (vp *VMProcess) removePIDFile() error {
 }
 
 func (vp *VMProcess) writePIDFile() error {
-	tmpFile, err := os.CreateTemp(vp.config.WorkingDirectory, "vfkit.pid.*")
+	tmpFile, err := os.CreateTemp(vp.config.WorkingDirectory, "vm.pid.*")
 	if err != nil {
 		return fmt.Errorf("failed to create temporary PID file: %w", err)
 	}
@@ -324,8 +327,8 @@ func (vp *VMProcess) startVMProcess() error {
 		return fmt.Errorf("VM process is already running")
 	}
 
-	vfkitCommand := vp.buildVfkitCommand()
-	cmd := exec.Command(vfkitCommand[0], vfkitCommand[1:]...)
+	driverCommand := vp.buildDriverCommand()
+	cmd := exec.Command(driverCommand[0], driverCommand[1:]...)
 	cmd.Dir = vp.config.WorkingDirectory
 
 	var stdout, stderr io.ReadCloser
@@ -346,8 +349,27 @@ func (vp *VMProcess) startVMProcess() error {
 		cmd.Stderr = io.Discard
 	}
 
+	var fd *os.File
+	if vp.vmnetHelper != nil {
+		var err error
+		fd, err = vp.vmnetHelper.Start()
+		if err != nil {
+			return err
+		}
+
+		cmd.ExtraFiles = []*os.File{fd}
+	}
+
 	if err := cmd.Start(); err != nil {
+		if vp.vmnetHelper != nil {
+			fd.Close()
+			vp.vmnetHelper.Stop(10 * time.Second)
+		}
 		return fmt.Errorf("failed to execute command: %w", err)
+	}
+
+	if vp.vmnetHelper != nil {
+		fd.Close()
 	}
 
 	vp.mu.Lock()
@@ -403,6 +425,9 @@ func (vp *VMProcess) monitorVM() {
 	}
 
 	if !vp.shutdownRequested.Load() {
+		if vp.vmnetHelper != nil {
+			vp.vmnetHelper.Stop(10 * time.Second)
+		}
 		vp.resetVMProcessState()
 	}
 }
@@ -495,8 +520,8 @@ func (vp *VMProcess) Start() error {
 
 	vp.shutdownRequested.Store(false)
 
-	if err := vp.killOrphanedVfkitProcesses(); err != nil {
-		slog.Error("failed to kill orphaned vfkit process", "error", err)
+	if err := vp.killOrphanedDriverProcesses(); err != nil {
+		slog.Error(fmt.Sprintf("failed to kill orphaned %s process", vp.config.Driver), "error", err)
 	}
 	if err := vp.startVMProcess(); err != nil {
 		return err
@@ -520,7 +545,7 @@ func (vp *VMProcess) Start() error {
 	return nil
 }
 
-func (vp *VMProcess) Stop(timeout time.Duration) error {
+func (vp *VMProcess) Stop(timeout time.Duration) {
 	slog.Info("stopping the VM")
 
 	vp.shutdownRequested.Store(true)
@@ -541,10 +566,13 @@ func (vp *VMProcess) Stop(timeout time.Duration) error {
 			cmd.Process.Kill()
 			<-exitCh
 		}
+
+		if vp.vmnetHelper != nil {
+			vp.vmnetHelper.Stop(10 * time.Second)
+		}
 	}
 
 	vp.resetVMProcessState()
-	return nil
 }
 
 func (vp *VMProcess) Pause() error {
@@ -594,9 +622,7 @@ func (vp *VMProcess) PauseOrStop() error {
 	slog.Info("VM cannot be paused, stopping instead")
 
 	stopTimeout := 30 * time.Second
-	if err := vp.Stop(stopTimeout); err != nil {
-		return err
-	}
+	vp.Stop(stopTimeout)
 
 	return nil
 }
@@ -612,17 +638,13 @@ func (vp *VMProcess) ResumeOrStart() error {
 		if err := vp.Resume(); err == nil {
 			return nil
 		}
-		if err := vp.Stop(30 * time.Second); err != nil {
-			return err
-		}
+		vp.Stop(30 * time.Second)
 
 	case VMProcessStateStopped:
 		break
 
 	case VMProcessStateUnknown:
-		if err := vp.Stop(30 * time.Second); err != nil {
-			return err
-		}
+		vp.Stop(30 * time.Second)
 	}
 
 	if err := vp.Start(); err != nil {
@@ -632,7 +654,7 @@ func (vp *VMProcess) ResumeOrStart() error {
 	return nil
 }
 
-func (vp *VMProcess) killOrphanedVfkitProcesses() error {
+func (vp *VMProcess) killOrphanedDriverProcesses() error {
 	content, err := os.ReadFile(vp.pidFile)
 	if err != nil {
 		if os.IsNotExist(err) {

@@ -27,9 +27,9 @@ const (
 )
 
 type APIClient struct {
-	port           int
-	isRunningCheck func() bool
 	client         *http.Client
+	isRunningCheck func() bool
+	port           int
 }
 
 func NewAPIClient(port int, isRunningCheck func() bool) *APIClient {
@@ -42,9 +42,9 @@ func NewAPIClient(port int, isRunningCheck func() bool) *APIClient {
 	}
 
 	return &APIClient{
-		port:           port,
-		isRunningCheck: isRunningCheck,
 		client:         client,
+		isRunningCheck: isRunningCheck,
+		port:           port,
 	}
 }
 
@@ -99,6 +99,9 @@ func (c *APIClient) callAPI(endpoint string, method string, data Data) (Data, er
 		if err != nil || len(respBody) == 0 {
 			return nil, nil
 		}
+
+		// krunkit appends a null byte to the JSON response
+		respBody = bytes.TrimRight(respBody, "\x00")
 
 		var result Data
 		if err := json.Unmarshal(respBody, &result); err != nil {
