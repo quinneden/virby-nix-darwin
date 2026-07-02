@@ -70,9 +70,7 @@ func (r *Runner) scheduleShutdownCheck(ctx context.Context) error {
 					return err
 				}
 			} else {
-				if err := r.vmProcess.Stop(30 * time.Second); err != nil {
-					return err
-				}
+				r.vmProcess.Stop(30 * time.Second)
 			}
 		}
 		return nil

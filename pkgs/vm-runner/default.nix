@@ -1,8 +1,4 @@
-{
-  buildGoModule,
-  lib,
-  vfkit,
-}:
+{ buildGoModule, lib }:
 
 buildGoModule {
   name = "virby-vm-runner";
@@ -10,10 +6,8 @@ buildGoModule {
 
   vendorHash = "sha256-Ivlyju4bHiKAfCKAYUmmoQzChD6o1kHE7dSrFwz7aDU=";
 
-  ldflags = [ "-X vm-runner/internal/vmprocess.vfkitBin=${lib.getExe vfkit}" ];
-
   meta = {
-    description = "Vfkit-based VM runner for Virby";
+    description = "VM runner for Virby";
     homepage = "https://github.com/quinneden/virby-nix-darwin";
     license = lib.licenses.mit;
     platforms = lib.platforms.darwin;

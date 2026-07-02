@@ -1,4 +1,13 @@
-{ lib, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
+
+let
+  cfg = config.services.virby;
+in
 
 {
   options.services.virby = {
@@ -37,18 +46,6 @@
       '';
     };
 
-    supportDeterminateNix = lib.mkOption {
-      type = lib.types.bool;
-      default = false;
-      description = ''
-        Whether to enable support for using Virby with Determinate Nix.
-
-        When enabled, the config will set `determinateNix.buildMachines` instead of
-        `nix.buildMachines`. This requires that the Determinate module for Nix-darwin is already
-        imported in your configuration and will throw an error otherwise.
-      '';
-    };
-
     diskSize = lib.mkOption {
       type = lib.types.str;
       default = "100GiB";
@@ -56,6 +53,30 @@
         The size of the disk image for the VM.
 
         The option value must be a string with a number, followed by the suffix "GiB".
+      '';
+    };
+
+    driver = lib.mkOption {
+      type = lib.types.enum [
+        "krunkit"
+        "vfkit"
+      ];
+      default = "vfkit";
+      description = ''
+        The virtualization driver used to run the VM.
+
+        Must be either "krunkit" or "vfkit".
+      '';
+    };
+
+    driverPackage = lib.mkOption {
+      type = lib.types.package;
+      readOnly = true;
+      default = pkgs.${cfg.driver};
+      description = ''
+        Read-only option exposing the virtualization driver package.
+
+        To specify which driver to use for the VM, use the `services.virby.driver` option instead.
       '';
     };
 
@@ -170,6 +191,18 @@
 
         This is an arbitrary integer that indicates the speed of this builder, relative to other
         builders. Higher is faster.
+      '';
+    };
+
+    supportDeterminateNix = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        Whether to enable support for using Virby with Determinate Nix.
+
+        When enabled, the config will set `determinateNix.buildMachines` instead of
+        `nix.buildMachines`. This requires that the Determinate module for Nix-darwin is already
+        imported in your configuration and will throw an error otherwise.
       '';
     };
   };

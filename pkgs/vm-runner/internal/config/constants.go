@@ -1,6 +1,7 @@
 package config
 
 const (
+	DriverKrunkit           = "krunkit"
 	IPDiscoveryTimeout      = 60
 	SSHReadyTimeout         = 30
 	VMPauseTimeout          = 30

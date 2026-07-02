@@ -75,12 +75,15 @@ let
     builtins.toJSON {
       cores = cfg.cores;
       debug = cfg.debug;
+      driver = cfg.driver;
+      driver-bin = lib.getExe cfg.driverPackage;
       memory = parseMemoryMiB cfg.memory;
       on-demand = cfg.onDemand.enable;
       port = cfg.port;
       rosetta = cfg.rosetta;
-      ttl = cfg.onDemand.ttl * 60; # Convert to seconds
       shared-dirs = cfg.sharedDirectories;
+      ttl = cfg.onDemand.ttl * 60;
+      vmnet-helper-bin = lib.optionalString (cfg.driver == "krunkit") (lib.getExe pkgs.vmnet-helper);
     }
   );
 
@@ -238,6 +241,9 @@ in
   imports = [ ./options.nix ];
 
   config = lib.mkMerge [
+    # FIXME: remove when https://github.com/NixOS/nixpkgs/pull/525378 is merged
+    (lib.mkIf (cfg.driver == "krunkit") { nixpkgs.overlays = [ self.overlays.default ]; })
+
     (lib.mkIf (!cfg.enable) {
       system.activationScripts.postActivation.text = lib.mkBefore ''
         ${setupLogFunctions}
@@ -378,12 +384,7 @@ in
       system.build.virbyImage = imageWithFinalConfig;
     })
 
-    (lib.mkIf (!cfg.supportDeterminateNix) {
-      nix = {
-        inherit buildMachines distributedBuilds;
-        settings.builders-use-substitutes = lib.mkDefault true;
-      };
-    })
+    (lib.mkIf (!cfg.supportDeterminateNix) { nix = { inherit buildMachines distributedBuilds; }; })
 
     (lib.mkIf cfg.supportDeterminateNix (
       {
@@ -402,10 +403,7 @@ in
         ];
       }
       // lib.optionalAttrs (options ? determinateNix) {
-        determinateNix = {
-          inherit buildMachines distributedBuilds;
-          customSettings.builders-use-substitutes = lib.mkDefault true;
-        };
+        determinateNix = { inherit buildMachines distributedBuilds; };
       }
     ))
   ];

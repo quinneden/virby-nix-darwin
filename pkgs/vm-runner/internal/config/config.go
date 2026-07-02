@@ -8,25 +8,31 @@ import (
 )
 
 type vmConfigJSON struct {
-	Cores      int               `json:"cores"`
-	Debug      bool              `json:"debug"`
-	Memory     int               `json:"memory"`
-	OnDemand   bool              `json:"on-demand"`
-	Port       int               `json:"port"`
-	Rosetta    bool              `json:"rosetta"`
-	SharedDirs map[string]string `json:"shared-dirs"`
-	TTL        int               `json:"ttl"`
+	Cores          int               `json:"cores"`
+	Debug          bool              `json:"debug"`
+	Driver         string            `json:"driver"`
+	DriverBin      string            `json:"driver-bin"`
+	Memory         int               `json:"memory"`
+	OnDemand       bool              `json:"on-demand"`
+	Port           int               `json:"port"`
+	Rosetta        bool              `json:"rosetta"`
+	SharedDirs     map[string]string `json:"shared-dirs"`
+	TTL            int               `json:"ttl"`
+	VMNetHelperBin string            `json:"vmnet-helper-bin"`
 }
 
 type VMConfig struct {
 	Cores            int
 	Debug            bool
+	Driver           string
+	DriverBin        string
 	Memory           int
 	OnDemand         bool
 	Port             int
 	Rosetta          bool
 	SharedDirs       map[string]string
 	TTL              int
+	VMNetHelperBin   string
 	WorkingDirectory string
 }
 
@@ -52,6 +58,13 @@ func NewVMConfig(configFilePath string) (*VMConfig, error) {
 		return nil, fmt.Errorf("invalid value for 'port': %v", raw.Port)
 	}
 
+	if _, err := os.Stat(raw.DriverBin); err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("path not found: %s", raw.DriverBin)
+		}
+		return nil, fmt.Errorf("could not access path: %w", err)
+	}
+
 	resolvedSharedDirs := make(map[string]string)
 
 	for tag, path := range raw.SharedDirs {
@@ -72,6 +85,15 @@ func NewVMConfig(configFilePath string) (*VMConfig, error) {
 		}
 
 		resolvedSharedDirs[tag] = absPath
+	}
+
+	if raw.Driver == DriverKrunkit {
+		if _, err := os.Stat(raw.VMNetHelperBin); err != nil {
+			if os.IsNotExist(err) {
+				return nil, fmt.Errorf("path not found: %s", raw.VMNetHelperBin)
+			}
+			return nil, fmt.Errorf("could not access path: %w", err)
+		}
 	}
 
 	workingDirectory := os.Getenv("VIRBY_WORKING_DIRECTORY")
@@ -98,12 +120,15 @@ func NewVMConfig(configFilePath string) (*VMConfig, error) {
 	return &VMConfig{
 		Cores:            raw.Cores,
 		Debug:            raw.Debug,
+		Driver:           raw.Driver,
+		DriverBin:        raw.DriverBin,
 		Memory:           raw.Memory,
 		OnDemand:         raw.OnDemand,
 		Port:             raw.Port,
 		Rosetta:          raw.Rosetta,
 		SharedDirs:       resolvedSharedDirs,
 		TTL:              raw.TTL,
+		VMNetHelperBin:   raw.VMNetHelperBin,
 		WorkingDirectory: workingDirectoryAbs,
 	}, nil
 }
