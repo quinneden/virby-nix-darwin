@@ -10,9 +10,9 @@ import (
 	"sync/atomic"
 	"time"
 	"vm-runner/internal/config"
-	"vm-runner/internal/signalmanager"
-	"vm-runner/internal/socketactivation"
-	"vm-runner/internal/vmprocess"
+	"vm-runner/internal/signal_manager"
+	"vm-runner/internal/socket_activation"
+	"vm-runner/internal/vm_process"
 )
 
 type Runner struct {
@@ -23,17 +23,17 @@ type Runner struct {
 	mu                  sync.Mutex
 	shutdownRequested   atomic.Bool
 	shutdownTimerCancel context.CancelFunc
-	signalManager       *signalmanager.SignalManager
-	socketActivation    *socketactivation.SocketActivation
-	vmProcess           *vmprocess.VMProcess
+	signalManager       *signal_manager.SignalManager
+	socketActivation    *socket_activation.SocketActivation
+	vmProcess           *vm_process.VMProcess
 }
 
-func NewRunner(config *config.VMConfig, signalManager *signalmanager.SignalManager) *Runner {
+func NewRunner(config *config.VMConfig, signalManager *signal_manager.SignalManager) *Runner {
 	return &Runner{
 		config:           config,
 		signalManager:    signalManager,
-		socketActivation: socketactivation.NewSocketActivation(config.Debug, config.Port),
-		vmProcess:        vmprocess.NewVMProcess(config),
+		socketActivation: socket_activation.NewSocketActivation(config.Debug, config.Port),
+		vmProcess:        vm_process.NewVMProcess(config),
 	}
 }
 

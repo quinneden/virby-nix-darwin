@@ -1,4 +1,4 @@
-package socketactivation
+package socket_activation
 
 /*
 #include <launch.h>

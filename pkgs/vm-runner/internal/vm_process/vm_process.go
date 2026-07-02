@@ -1,4 +1,4 @@
-package vmprocess
+package vm_process
 
 import (
 	"bufio"
@@ -18,11 +18,11 @@ import (
 	"syscall"
 	"time"
 	"vm-runner/internal/api"
-	"vm-runner/internal/circuitbreaker"
+	"vm-runner/internal/circuit_breaker"
 	"vm-runner/internal/config"
-	"vm-runner/internal/ipdiscovery"
+	"vm-runner/internal/ip_discovery"
 	"vm-runner/internal/ssh"
-	"vm-runner/internal/vmnethelper"
+	"vm-runner/internal/vmnet_helper"
 )
 
 type VMProcessState string
@@ -37,18 +37,18 @@ const (
 type VMProcess struct {
 	apiClient         *api.APIClient
 	apiPort           int
-	circuitBreaker    *circuitbreaker.CircuitBreaker
+	circuitBreaker    *circuit_breaker.CircuitBreaker
 	command           *exec.Cmd
 	config            *config.VMConfig
 	ipAddress         string
-	ipDiscovery       *ipdiscovery.IPDiscovery
+	ipDiscovery       *ip_discovery.IPDiscovery
 	macAddress        string
 	mu                sync.Mutex
 	outputCh          chan struct{}
 	pidFile           string
 	processExitCh     chan struct{}
 	shutdownRequested atomic.Bool
-	vmnetHelper       *vmnethelper.VMNetHelper
+	vmnetHelper       *vmnet_helper.VMNetHelper
 }
 
 func generateMacAddress() string {
@@ -88,9 +88,9 @@ func NewVMProcess(cfg *config.VMConfig) *VMProcess {
 
 	vp := &VMProcess{
 		apiPort:        apiPort,
-		circuitBreaker: circuitbreaker.NewCircuitBreaker(3, 10*time.Second),
+		circuitBreaker: circuit_breaker.NewCircuitBreaker(3, 10*time.Second),
 		config:         cfg,
-		ipDiscovery:    ipdiscovery.NewIPDiscovery(macAddress, ""),
+		ipDiscovery:    ip_discovery.NewIPDiscovery(macAddress, ""),
 		macAddress:     macAddress,
 		pidFile:        filepath.Join(cfg.WorkingDirectory, "vm.pid"),
 	}
@@ -98,7 +98,7 @@ func NewVMProcess(cfg *config.VMConfig) *VMProcess {
 	vp.apiClient = api.NewAPIClient(apiPort, vp.IsRunning)
 
 	if vp.config.Driver == config.DriverKrunkit {
-		vp.vmnetHelper = vmnethelper.NewVMNetHelper(vp.config.VMNetHelperBin)
+		vp.vmnetHelper = vmnet_helper.NewVMNetHelper(vp.config.VMNetHelperBin)
 	}
 
 	return vp

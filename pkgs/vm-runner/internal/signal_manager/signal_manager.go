@@ -1,4 +1,4 @@
-package signalmanager
+package signal_manager
 
 import (
 	"os"

@@ -1,4 +1,4 @@
-package vmnethelper
+package vmnet_helper
 
 import (
 	"encoding/json"

@@ -1,4 +1,4 @@
-package vmprocess
+package vm_process
 
 import "time"
 

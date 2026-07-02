@@ -5,7 +5,7 @@ import (
 	"os"
 	"vm-runner/internal/config"
 	"vm-runner/internal/runner"
-	"vm-runner/internal/signalmanager"
+	"vm-runner/internal/signal_manager"
 )
 
 func setupLogging(debug bool) {
@@ -30,7 +30,7 @@ func run() int {
 
 	setupLogging(cfg.Debug)
 
-	sm := signalmanager.NewSignalManager()
+	sm := signal_manager.NewSignalManager()
 	sm.Setup()
 	defer sm.Cleanup()
 

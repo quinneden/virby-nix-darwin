@@ -1,4 +1,4 @@
-package ipdiscovery
+package ip_discovery
 
 import (
 	"fmt"
