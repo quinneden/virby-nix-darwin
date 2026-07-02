@@ -205,7 +205,7 @@ ssh virby-vm
 ## Acknowledgments
 
 - Inspired by [nix-rosetta-builder](https://github.com/cpick/nix-rosetta-builder)
-- Integrates [vfkit](https://github.com/crc-org/vfkit), [krunkit](https://github.com/libkrun/krunkit), and [vmnet-helper](https://github.com/nirs/vmnet-helper)
+- Incorporates [vfkit](https://github.com/crc-org/vfkit), [krunkit](https://github.com/libkrun/krunkit), and [vmnet-helper](https://github.com/nirs/vmnet-helper)
 
 ---
 
